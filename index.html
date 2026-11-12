@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#09040d" />
+<title>我们的两周年</title>
+<link rel="stylesheet" href="css/style.css" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%E2%99%A5%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+
+  <!-- 背景微光 -->
+  <div class="bg-glow" aria-hidden="true"></div>
+  <canvas class="petal-atmosphere" id="petalAtmosphere" aria-hidden="true"></canvas>
+  <div class="scene-vignette" aria-hidden="true"></div>
+
+  <!-- ===== 3D 舞台：镜头在圆柱内部，看内壁 ===== -->
+  <main class="stage-wrap" id="stageWrap">
+    <div class="cylinder" id="cylinder">
+      <div class="world" id="world"></div>
+      <!-- 与照片共享三维空间：后排在花后，前排在花前。 -->
+      <iframe class="center-rose" id="centerRose" src="rose.html?embed=1" title="中央粒子玫瑰" tabindex="-1" aria-hidden="true"></iframe>
+    </div>
+  </main>
+
+  <!-- ===== 两周年告白 ===== -->
+  <header class="topbar" id="topbar">
+    <h1 class="title" id="title">两年啦，还是好喜欢你。</h1>
+    <p class="subtitle" id="subtitle"></p>
+  </header>
+
+  <!-- ===== 控制按钮 ===== -->
+  <div class="controls">
+    <button class="ctrl" id="btnRotate" type="button" title="暂停 / 继续自动旋转" aria-label="自动旋转">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4V2a1 1 0 0 1 1.6-.8l4 3a1 1 0 0 1 0 1.6l-4 3A1 1 0 0 1 12 8V6a6 6 0 1 0 6 6 1 1 0 0 1 2 0 8 8 0 1 1-8-8z"/></svg>
+    </button>
+    <button class="ctrl" id="btnReset" type="button" title="回到初始视角（R）" aria-label="回到初始视角">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10V4m0 0h6M4 4l4.5 4.5M7 17a7 7 0 1 0 1-10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="ctrl" id="btnMusic" type="button" title="告白气球 · 播放 / 暂停" aria-label="播放告白气球">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18a3 3 0 1 1-2-2.83V6.2a1 1 0 0 1 .76-.97l9-2.2A1 1 0 0 1 18 4v9.17A3 3 0 1 1 16 10.4V6.28l-7 1.7V18z"/></svg>
+    </button>
+    <button class="ctrl" id="btnFull" type="button" title="全屏" aria-label="全屏">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V5a1 1 0 0 1 1-1h4M20 9V5a1 1 0 0 0-1-1h-4M4 15v4a1 1 0 0 0 1 1h4M20 15v4a1 1 0 0 1-1 1h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+
+  <!-- ===== 拖拽提示 ===== -->
+  <div class="hint" id="hint">
+    <span class="hint-dot"></span>
+    <span class="hint-text">拖动转视角 · Shift 拖动平移 · 滚轮缩放</span>
+  </div>
+
+  <!-- ===== 灯箱 ===== -->
+  <div class="lightbox" id="lightbox" aria-hidden="true">
+    <div class="lb-backdrop" data-close></div>
+    <button class="lb-close" id="lbClose" type="button" aria-label="关闭">✕</button>
+    <button class="lb-nav prev" id="lbPrev" type="button" aria-label="上一张">‹</button>
+    <button class="lb-nav next" id="lbNext" type="button" aria-label="下一张">›</button>
+    <figure class="lb-figure">
+      <img id="lbImg" alt="" />
+      <figcaption>
+        <p id="lbCap"></p>
+        <p class="lb-love" id="lbMessage" hidden></p>
+      </figcaption>
+    </figure>
+  </div>
+
+  <!-- ===== 提示气泡 ===== -->
+  <div class="toast" id="toast"></div>
+
+  <!-- ===== 开场按钮 ===== -->
+  <div class="enter" id="enter">
+    <div class="enter-content">
+      <div class="enter-copy">
+        <p class="enter-kicker" id="introKicker">给我们的两周年</p>
+        <h2 class="enter-heading" id="introHeading">两年啦，还是好喜欢你。</h2>
+      </div>
+      <button class="enter-btn" id="enterBtn" type="button">
+        <span id="enterText">给最喜欢的你</span>
+      </button>
+      <div class="enter-letter">
+        <p class="enter-note" id="introNote">第一年心动，第二年心安。
+往后的每一年，都想有你。</p>
+        <p class="enter-sign" id="introSign">两周年快乐，下一年也要牵紧你的手。</p>
+        <span class="enter-heart" aria-hidden="true">♡</span>
+      </div>
+    </div>
+  </div>
+
+  <audio id="bgm" loop preload="metadata" hidden></audio>
+
+  <script src="js/config.js"></script>
+  <script src="js/atmosphere.js"></script>
+  <script src="js/music.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

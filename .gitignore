@@ -1,0 +1,13 @@
+/.release/
+/dist/
+/_backup_*/
+/v3.0_*/
+/_ref/
+/周杰伦 - 告白气球_EG (V0).mp3
+/audio/bgm.mp3
+/audio/confession-balloon-compatible.mp3
+/audio/confession-balloon.m4a
+__pycache__/
+*.pyc
+Thumbs.db
+.DS_Store
