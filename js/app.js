@@ -23,7 +23,7 @@
 
   function num(v, d) { return typeof v === "number" && isFinite(v) ? v : d; }
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
-  var MOBILE_FPS = clamp(num((CFG.performance || {}).mobileFps, 120), 30, 120);
+  var TARGET_FPS = clamp(num((CFG.performance || {}).targetFps, 120), 1, 120);
 
   var OPT = {
     rows: clamp(Math.round(num(LAY.rows, 3)), 1, 6),
@@ -94,6 +94,7 @@
   var pointers = new Map();
   var gesture = null;
   var lastFrame = 0;
+  var lastRender = 0;
   var rotation = 0;        // 拖动带来的整体转角
   var autoRotation = 0;    // 各排自动旋转的独立相位
   var rowLayers = [];
@@ -337,6 +338,8 @@
   function tick(time) {
     frameId = null;
     if (document.hidden) return;
+    if (lastRender && time - lastRender < 1000 / TARGET_FPS - 0.5) { requestRender(); return; }
+    lastRender = time;
     var delta = lastFrame ? clamp((time - lastFrame) / (1000 / 60), 0, 3) : 1;
     lastFrame = time;
     // 各排的自动相位独立推进，拖动、惯性、缩放、复位和大图均不打断。
@@ -731,7 +734,7 @@
       window.addEventListener("message", function (event) {
         if (event.source === roseFrame.contentWindow && event.data === "story:rose:ready") startCenterRose();
       });
-      roseFrame.src = "rose.html?embed=1" + (MOBILE ? "&lite=1&fps=" + MOBILE_FPS : "") + "&v=mobile120";
+      roseFrame.src = "rose.html?embed=1&fps=" + TARGET_FPS + (MOBILE ? "&lite=1" : "") + "&v=all120";
     }
     document.getElementById("introKicker").textContent = INTRO.kicker || "给我们的两周年";
     document.getElementById("introHeading").textContent = INTRO.heading || "两年啦，还是好喜欢你。";

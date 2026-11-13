@@ -26,7 +26,9 @@
     var seek = document.getElementById("lbSoftwareSeek");
     var time = document.getElementById("lbSoftwareTime");
     var status = document.getElementById("lbSoftwareStatus");
-    var player = null, timer = null, generation = 0, duration = 0, ended = false;
+    var player = null, progressFrame = null, generation = 0, duration = 0, ended = false;
+    var lastProgress = 0;
+    var targetFps = Math.max(1, Math.min(120, Number(((window.SITE_CONFIG || {}).performance || {}).targetFps) || 120));
     function format(value) {
       value = Math.max(0, Math.floor(value || 0));
       return Math.floor(value / 60) + ":" + (value % 60 < 10 ? "0" : "") + value % 60;
@@ -35,12 +37,31 @@
       if (!player) return;
       var current = Math.min(duration, Math.max(0, player.currentTime || 0));
       seek.value = current;
-      time.textContent = format(current) + " / " + format(duration);
+      var label = format(current) + " / " + format(duration);
+      if (time.textContent !== label) time.textContent = label;
+    }
+    function pauseProgress() {
+      if (progressFrame !== null) cancelAnimationFrame(progressFrame);
+      progressFrame = null;
+      lastProgress = 0;
+    }
+    function requestProgress() {
+      if (player && !player.paused && !document.hidden && progressFrame === null) {
+        progressFrame = requestAnimationFrame(animateProgress);
+      }
+    }
+    function animateProgress(now) {
+      progressFrame = null;
+      if (!player || player.paused || document.hidden) return;
+      if (!lastProgress || now - lastProgress >= 1000 / targetFps - .5) {
+        lastProgress = now;
+        update();
+      }
+      requestProgress();
     }
     function stop() {
       generation++;
-      clearInterval(timer);
-      timer = null;
+      pauseProgress();
       if (player) player.destroy();
       player = null;
       box.hidden = true;
@@ -88,7 +109,7 @@
           button.disabled = false;
           seek.disabled = false;
           status.textContent = "点播放，看看这段回忆。";
-          timer = setInterval(update, 250);
+          update();
         }).catch(function (error) {
           if (session !== generation || error.name === "AbortError") return;
           status.textContent = "这段回忆还没加载成功，请关闭后重试。";
@@ -100,7 +121,12 @@
         player = new decoder.Player(media.software, {
         canvas: canvas, source: Source, autoplay: false, loop: false,
         disableWebAssembly: true, disableGl: true, pauseWhenHidden: false,
-        onPause: function () { if (session === generation) button.textContent = "播放"; },
+        onPause: function () {
+          if (session !== generation) return;
+          pauseProgress();
+          button.textContent = "播放";
+          update();
+        },
         onEnded: function () {
           if (session !== generation) return;
           ended = true;
@@ -129,6 +155,7 @@
         player.audioOut.unlock();
       }
       player.play();
+      requestProgress();
       button.textContent = "暂停";
       status.textContent = "";
     });
@@ -138,6 +165,10 @@
       if (player.paused) player.video.decode();
       ended = false;
       update();
+    });
+    document.addEventListener("visibilitychange", function () {
+      if (document.hidden) pauseProgress();
+      else requestProgress();
     });
     return { play: play, stop: stop };
   };

@@ -386,8 +386,8 @@
       function paint(time){
         if(finished)return;if(start===null)start=time;
         var elapsed=time-start,t=Math.min(.55,clamp(elapsed/DURATION,0,1));
-        var targetFps=(((window.SITE_CONFIG||{}).performance||{}).mobileFps)||120;
-        if(elapsed-lastPaint>=(MOBILE?1000/targetFps:1000/60)-1||elapsed>=END_AT){
+        var targetFps=Math.max(1,Math.min(120,Number(((window.SITE_CONFIG||{}).performance||{}).targetFps)||120));
+        if(elapsed-lastPaint>=1000/targetFps-.5||elapsed>=END_AT){
           lastPaint=elapsed;
           ctx.setTransform(view.dpr,0,0,view.dpr,0,0);ctx.clearRect(0,0,view.w,view.h);
           if(scatterFrame){
