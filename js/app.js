@@ -184,7 +184,7 @@
         var p = videoRow ? videos[i] : photos[(r * OPT.perRow + i) % n];
         var el = makeCard(p, theta, yBase);
         rowLayer.appendChild(el);
-        items.push({ el: el, theta: theta, y: yBase, src: p.src, cap: p.cap || "", message: p.message || "", type: videoRow ? "video" : "photo", poster: p.poster || "", webm: p.webm || "" });
+        items.push({ el: el, theta: theta, y: yBase, src: p.src, cap: p.cap || "", message: p.message || "", type: videoRow ? "video" : "photo", poster: p.poster || "", webm: p.webm || "", software: p.software || "", duration: p.duration || 0 });
       }
     }
     world.appendChild(fragment);

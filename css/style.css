@@ -581,3 +581,12 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 }
 .lb-figure video{width:min(80vw,850px);background:#08060a}
 .lb-figure video[hidden],.lb-figure img[hidden]{display:none}
+
+.lb-software{width:min(80vw,850px);border-radius:6px;overflow:hidden;background:#08060a}
+.lb-software[hidden]{display:none}
+.lb-software canvas{display:block;width:100%;height:auto;max-height:min(62vh,calc(84vh - 150px));object-fit:contain;background:center/contain no-repeat}
+.lb-software-controls{display:flex;align-items:center;gap:12px;padding:12px;color:#eee;font-size:12px}
+.lb-software-controls button{padding:7px 12px;border:1px solid #74525f;border-radius:20px;color:#f7d4df;background:#31202a;white-space:nowrap}
+.lb-software-controls input{min-width:0;flex:1;accent-color:#e7a0bb}
+.lb-software-controls span{white-space:nowrap;font-variant-numeric:tabular-nums}
+#lbSoftwareStatus{min-height:1.5em;padding:0 12px 10px;text-align:center;font-size:12px;color:#dbb8c5}
