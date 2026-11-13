@@ -175,7 +175,7 @@
       var offset = (r % 2 === 0 ? 0.5 : 0) * stepDeg;
       for (var i = 0; i < OPT.perRow; i++) {
         var theta = offset + stepDeg * i;
-        var p = photos[(r * 5 + i) % n];
+        var p = photos[(r * OPT.perRow + i) % n];
         var el = makeCard(p, theta, yBase);
         rowLayer.appendChild(el);
         items.push({ el: el, theta: theta, y: yBase, src: p.src, cap: p.cap || "", message: p.message || "" });
@@ -204,7 +204,7 @@
       img.decoding = "async";
       img.draggable = false;
       img.onerror = function () { this.onerror = null; this.src = FALLBACK; };
-      img.src = p.src;
+      img.src = p.thumbnail || p.src;
       face.appendChild(img);
       if (p.cap) {
         var cap = document.createElement("span");
