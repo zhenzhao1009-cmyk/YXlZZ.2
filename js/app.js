@@ -1,7 +1,7 @@
 /* =========================================================
    我们的故事 · 俯视环绕照片墙
-   三排照片围成一个圆筒，镜头从上方俯看。
-   第一、三排顺时针转，第二排逆时针转；整体倾斜，远处小、近处大。
+   三圈照片与第四圈视频围成一个圆筒，镜头从上方俯看。
+   第一、三排顺时针转，第二、四排逆时针转；整体倾斜，远处小、近处大。
    ========================================================= */
 (function () {
   "use strict";
@@ -43,6 +43,8 @@
   var world = document.getElementById("world");
   var lightbox = document.getElementById("lightbox");
   var lbImg = document.getElementById("lbImg");
+  var lbVideo = document.getElementById("lbVideo");
+  var resumeMusicAfterVideo = false;
   var lbCap = document.getElementById("lbCap");
   var lbMessage = document.getElementById("lbMessage");
   var toastEl = document.getElementById("toast");
@@ -57,6 +59,7 @@
   var enterBtn = document.getElementById("enterBtn");
 
   var photos = (CFG.photos || []).slice();
+  var videos = (CFG.videos || []).slice();
   var items = [];          // { el, theta, y, src, cap }
   var R = 600;             // 圆柱半径
   var P = 1600;            // 透视距离
@@ -153,7 +156,7 @@
       "rotateY(" + (-theta).toFixed(3) + "deg)";
   }
 
-  /* ---------- 三排照片 ---------- */
+  /* ---------- 三圈照片与第四圈视频 ---------- */
   function build() {
     world.innerHTML = "";
     items = [];
@@ -162,8 +165,6 @@
     var n = photos.length;
     if (!n) return;
 
-    var stepDeg = 360 / OPT.perRow;
-
     var fragment = document.createDocumentFragment();
     for (var r = 0; r < OPT.rows; r++) {
       var rowLayer = document.createElement("div");
@@ -171,14 +172,18 @@
       rowLayer.setAttribute("data-row", String(r + 1));
       rowLayers.push(rowLayer);
       fragment.appendChild(rowLayer);
+      var videoRow = videos.length > 0 && r === OPT.rows - 1;
+      var count = videoRow ? videos.length : OPT.perRow;
+      var stepDeg = 360 / count;
+      if (videoRow) rowLayer.classList.add("video-row");
       var yBase = (r - (OPT.rows - 1) / 2) * rowPitch;
       var offset = (r % 2 === 0 ? 0.5 : 0) * stepDeg;
-      for (var i = 0; i < OPT.perRow; i++) {
+      for (var i = 0; i < count; i++) {
         var theta = offset + stepDeg * i;
-        var p = photos[(r * OPT.perRow + i) % n];
+        var p = videoRow ? videos[i] : photos[(r * OPT.perRow + i) % n];
         var el = makeCard(p, theta, yBase);
         rowLayer.appendChild(el);
-        items.push({ el: el, theta: theta, y: yBase, src: p.src, cap: p.cap || "", message: p.message || "" });
+        items.push({ el: el, theta: theta, y: yBase, src: p.src, cap: p.cap || "", message: p.message || "", type: videoRow ? "video" : "photo", poster: p.poster || "" });
       }
     }
     world.appendChild(fragment);
@@ -189,8 +194,8 @@
   function makeCard(p, theta, y) {
     var el = document.createElement("button");
     el.type = "button";
-    el.className = "card";
-    el.setAttribute("aria-label", "查看照片：" + (p.cap || "我们的瞬间"));
+    el.className = "card" + (p.type === "video" ? " video-card" : "");
+    el.setAttribute("aria-label", (p.type === "video" ? "播放视频：" : "查看照片：") + (p.cap || "我们的瞬间"));
     el.style.transform = transformFor(theta, y);
 
     // 正反两面各自朝向镜头，前景的照片也能正常阅读。
@@ -204,13 +209,19 @@
       img.decoding = "async";
       img.draggable = false;
       img.onerror = function () { this.onerror = null; this.src = FALLBACK; };
-      img.src = p.thumbnail || p.src;
+      img.src = p.poster || p.thumbnail || p.src;
       face.appendChild(img);
       if (p.cap) {
         var cap = document.createElement("span");
         cap.className = "cap";
         cap.textContent = p.cap;
         face.appendChild(cap);
+      }
+      if (p.type === "video") {
+        var play = document.createElement("span");
+        play.className = "video-play";
+        play.textContent = "▶";
+        face.appendChild(play);
       }
       el.appendChild(face);
     }
@@ -421,8 +432,28 @@
     resetView = null;
     lbIndex = ((idx % items.length) + items.length) % items.length;
     var it = items[lbIndex];
-    lbImg.src = it.src;
-    lbImg.onerror = function () { lbImg.onerror = null; lbImg.src = FALLBACK; };
+    stopVideo();
+    var isVideo = it.type === "video";
+    lbImg.hidden = isVideo;
+    lbVideo.hidden = !isVideo;
+    if (isVideo) {
+      if (music && music.isActive()) {
+        resumeMusicAfterVideo = true;
+        music.pause();
+      }
+      lbImg.removeAttribute("src");
+      lbVideo.poster = it.poster;
+      lbVideo.src = it.src;
+      lbVideo.setAttribute("aria-label", it.cap || "我们的回忆视频");
+      lbVideo.play().catch(function (error) {
+        if (error.name === "AbortError") return;
+        toast(error.name === "NotAllowedError" ? "点击播放按钮，看看这段回忆" : "视频暂时无法播放，请重试");
+      });
+    } else {
+      lbImg.src = it.src;
+      lbImg.onerror = function () { lbImg.onerror = null; lbImg.src = FALLBACK; };
+      resumeBackgroundMusic();
+    }
     lbCap.textContent = it.cap || "";
     lbImg.alt = it.cap || "我们的两周年回忆";
     lbMessage.textContent = it.message;
@@ -430,7 +461,23 @@
     lightbox.classList.add("open");
     lightbox.setAttribute("aria-hidden", "false");
   }
+  function stopVideo() {
+    lbVideo.pause();
+    if (lbVideo.getAttribute("src")) {
+      lbVideo.removeAttribute("src");
+      lbVideo.load();
+    }
+  }
+
+  function resumeBackgroundMusic() {
+    if (!resumeMusicAfterVideo) return;
+    resumeMusicAfterVideo = false;
+    playMusic();
+  }
+
   function closeLightbox() {
+    stopVideo();
+    resumeBackgroundMusic();
     lightbox.classList.remove("open");
     lightbox.setAttribute("aria-hidden", "true");
   }

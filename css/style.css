@@ -10,7 +10,7 @@
   --radius: 700px;        /* 圆柱半径，由 JS 计算 */
   --card-w: 110px;        /* 单张卡片宽，由 JS 计算 */
   --card-h: 145px;
-  --rows: 3;
+  --rows: 4;
   --scene-center: 55%;
 
   --ink: #ffffff;
@@ -309,7 +309,8 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
   transition:transform .45s var(--ease);
 }
 .lightbox.open .lb-figure{transform:scale(1)}
-.lb-figure img{
+.lb-figure img,
+.lb-figure video{
   max-width:100%;
   max-height:min(68vh, calc(84vh - 100px));
   object-fit:contain;
@@ -569,3 +570,14 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
 }
+
+/* 视频沿第四圈展示封面，打开后才加载影片。 */
+.video-play{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:42px;height:42px;display:grid;place-items:center;
+  padding-left:3px;border-radius:50%;color:#fff;font-size:17px;
+  background:rgba(34,15,26,.55);border:1px solid rgba(255,224,234,.7);
+  box-shadow:0 4px 24px rgba(0,0,0,.3);backdrop-filter:blur(6px);
+}
+.lb-figure video{width:min(80vw,850px);background:#08060a}
+.lb-figure video[hidden],.lb-figure img[hidden]{display:none}
