@@ -104,6 +104,7 @@
   var lastX = 0, lastY = 0, lastT = 0;
   var lbIndex = 0;
   var entered = false;
+  var roseRevealed = false;
 
   function requestRender() {
     if (frameId === null && !document.hidden) frameId = requestAnimationFrame(tick);
@@ -654,7 +655,7 @@
         if (e.key === "ArrowRight") navigateLightbox(1);
         return;
       }
-      if (!entered) return;
+      if (!entered || document.body.classList.contains("ceremony-active")) return;
       if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "+", "=", "-", "r", "R"].indexOf(e.key) >= 0) {
         e.preventDefault();
         beginInteraction();
@@ -716,9 +717,9 @@
     effectsActive = null;
     updateActivity();
     requestRender();
-    if (entered) window.dispatchEvent(new Event("story:entered"));
+    if (entered && roseRevealed) window.dispatchEvent(new Event("story:entered"));
     var roseFrame = document.getElementById("centerRose");
-    if (entered && roseFrame && roseFrame.contentWindow) {
+    if (entered && roseRevealed && roseFrame && roseFrame.contentWindow) {
       roseFrame.contentWindow.postMessage("story:rose:start", "*");
     }
   }
@@ -748,19 +749,39 @@
     if (INTRO.show === false || skip) {
       enterEl.style.display = "none";
       entered = true;
+      roseRevealed = true;
       startCenterRose();
       if (OPT.hintAutoHide > 0) setTimeout(hideHint, OPT.hintAutoHide);
       return;
     }
     if (INTRO.text) document.getElementById("enterText").textContent = INTRO.text;
 
+    var playCeremony = window.createRingCeremony ? window.createRingCeremony(photos) : null;
+    var opening = false;
     enterBtn.addEventListener("click", function () {
-      entered = true;
-      startCenterRose();
+      if (opening) return;
+      opening = true;
+      enterBtn.disabled = true;
+      playMusic(); // Keep audio permission in the original user gesture.
       enterEl.classList.add("gone");
+      enterEl.inert = true;
       setTimeout(function () { enterEl.style.display = "none"; }, 350);
-      playMusic();
-      if (OPT.hintAutoHide > 0) setTimeout(hideHint, OPT.hintAutoHide);
+      stageWrap.inert = true;
+      document.querySelector(".controls").inert = true;
+      function reveal() {
+        entered = true;
+        startCenterRose();
+      }
+      function complete() {
+        roseRevealed = true;
+        startCenterRose();
+        stageWrap.inert = false;
+        document.querySelector(".controls").inert = false;
+        document.getElementById("btnRotate").focus({preventScroll:true});
+        if (OPT.hintAutoHide > 0) setTimeout(hideHint, OPT.hintAutoHide);
+      }
+      if (playCeremony) playCeremony(reveal, complete);
+      else { reveal(); complete(); }
     });
   }
 
