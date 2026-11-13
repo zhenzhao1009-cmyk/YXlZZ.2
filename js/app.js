@@ -448,11 +448,11 @@
       return;
     }
     var dragDirection = e.pointerType === "touch" ? -1 : 1;
-    rotation = gesture.rotation - dx * OPT.dragSpeed * dragDirection;
+    rotation = gesture.rotation + dx * OPT.dragSpeed;
     viewTilt = clamp(gesture.tilt + dy * OPT.tiltSpeed * dragDirection, MIN_TILT, MAX_TILT);
     var now = performance.now();
     var dt = Math.max(1, now - lastT);
-    velocity = -(e.clientX - lastX) / dt * OPT.dragSpeed * 16 * dragDirection;
+    velocity = (e.clientX - lastX) / dt * OPT.dragSpeed * 16;
     tiltVelocity = (e.clientY - lastY) / dt * OPT.tiltSpeed * 16 * dragDirection;
     lastX = e.clientX;
     lastY = e.clientY;
