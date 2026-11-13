@@ -1,6 +1,6 @@
 # 我们的故事 · 3D 滚动照片墙
 
-当前版本：**V1.0** · [在线访问](https://zhenzhao1009-cmyk.github.io/YXlZZ.2/) · [下载发布包](https://github.com/zhenzhao1009-cmyk/YXlZZ.2/releases/tag/V1.0)
+当前版本：**V2.0** · [在线访问](https://zhenzhao1009-cmyk.github.io/YXlZZ.2/) · [下载发布包](https://github.com/zhenzhao1009-cmyk/YXlZZ.2/releases/tag/V2.0)
 
 GitHub Pages 从 `main` 分支的根目录部署。发布包保留页面运行所需资源，包含原版 MP3 和 PCM 备用音频，不包含历史备份与试验音频。
 
