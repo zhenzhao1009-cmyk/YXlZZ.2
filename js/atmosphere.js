@@ -11,6 +11,7 @@
   var motion = window.matchMedia("(prefers-reduced-motion: reduce)");
   var reduced = motion.matches;
   var mobile = window.matchMedia("(pointer: coarse)").matches || window.innerWidth < 700;
+  var targetFps = Math.max(30, Math.min(120, Number(((window.SITE_CONFIG || {}).performance || {}).mobileFps) || 120));
   var galleryPaused = false;
   var petals = [], width = 0, height = 0, started = false, frameId = null, last = null, time = 0;
   function random(a, b) { return a + Math.random() * (b - a); }
@@ -71,7 +72,7 @@
   function frame(now) {
     frameId = null;
     if (!started || document.hidden || galleryPaused || reduced) return;
-    if (mobile && last !== null && now - last < 1000 / 30 - 0.5) {
+    if (mobile && last !== null && now - last < 1000 / targetFps - 0.5) {
       frameId = requestAnimationFrame(frame);
       return;
     }

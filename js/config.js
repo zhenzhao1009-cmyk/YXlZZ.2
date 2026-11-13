@@ -157,6 +157,7 @@ window.SITE_CONFIG = {
   ],
 
   mobileAtlas: {"src":"images/mobile/gallery.webp","columns":12,"rows":11},
+  performance: { mobileFps: 120 },
 
   /* ---------- 排布 ---------- */
   layout: {

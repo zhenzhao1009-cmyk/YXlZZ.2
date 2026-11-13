@@ -23,6 +23,7 @@
 
   function num(v, d) { return typeof v === "number" && isFinite(v) ? v : d; }
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+  var MOBILE_FPS = clamp(num((CFG.performance || {}).mobileFps, 120), 30, 120);
 
   var OPT = {
     rows: clamp(Math.round(num(LAY.rows, 3)), 1, 6),
@@ -728,7 +729,7 @@
       window.addEventListener("message", function (event) {
         if (event.source === roseFrame.contentWindow && event.data === "story:rose:ready") startCenterRose();
       });
-      roseFrame.src = "rose.html?embed=1" + (MOBILE ? "&lite=1" : "") + "&v=mobile1";
+      roseFrame.src = "rose.html?embed=1" + (MOBILE ? "&lite=1&fps=" + MOBILE_FPS : "") + "&v=mobile120";
     }
     document.getElementById("introKicker").textContent = INTRO.kicker || "给我们的两周年";
     document.getElementById("introHeading").textContent = INTRO.heading || "两年啦，还是好喜欢你。";

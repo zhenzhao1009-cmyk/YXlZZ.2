@@ -155,6 +155,7 @@
   function rr(a, b) { return a + (b - a) * rnd(); }
   function jit(a) { return (rnd() * 2 - 1) * a; }
   function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+  var targetFps = clamp(parseFloat(Q.fps) || 120, 30, 120);
   function smoothstep(e0, e1, x) {
     var t = clamp((x - e0) / (e1 - e0 || 1e-6), 0, 1);
     // 起止速度、加速度均为零，避免聚拢与绽放衔接时突兀。
@@ -704,7 +705,7 @@
   function frame(now) {
     frameId = null;
     if (document.hidden || embeddedPaused) return;
-    if (LITE && lastPaint && now - lastPaint < 1000 / 30 - 0.5) {
+    if (LITE && lastPaint && now - lastPaint < 1000 / targetFps - 0.5) {
       scheduleFrame();
       return;
     }
