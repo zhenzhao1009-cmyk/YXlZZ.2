@@ -45,6 +45,7 @@
   var lbImg = document.getElementById("lbImg");
   var lbVideo = document.getElementById("lbVideo");
   var resumeMusicAfterVideo = false;
+  var videoPlayback = window.createMemoryVideo(lbVideo, toast);
   var lbCap = document.getElementById("lbCap");
   var lbMessage = document.getElementById("lbMessage");
   var toastEl = document.getElementById("toast");
@@ -183,7 +184,7 @@
         var p = videoRow ? videos[i] : photos[(r * OPT.perRow + i) % n];
         var el = makeCard(p, theta, yBase);
         rowLayer.appendChild(el);
-        items.push({ el: el, theta: theta, y: yBase, src: p.src, cap: p.cap || "", message: p.message || "", type: videoRow ? "video" : "photo", poster: p.poster || "" });
+        items.push({ el: el, theta: theta, y: yBase, src: p.src, cap: p.cap || "", message: p.message || "", type: videoRow ? "video" : "photo", poster: p.poster || "", webm: p.webm || "" });
       }
     }
     world.appendChild(fragment);
@@ -443,12 +444,8 @@
       }
       lbImg.removeAttribute("src");
       lbVideo.poster = it.poster;
-      lbVideo.src = it.src;
       lbVideo.setAttribute("aria-label", it.cap || "我们的回忆视频");
-      lbVideo.play().catch(function (error) {
-        if (error.name === "AbortError") return;
-        toast(error.name === "NotAllowedError" ? "点击播放按钮，看看这段回忆" : "视频暂时无法播放，请重试");
-      });
+      videoPlayback.play(it);
     } else {
       lbImg.src = it.src;
       lbImg.onerror = function () { lbImg.onerror = null; lbImg.src = FALLBACK; };
@@ -462,11 +459,7 @@
     lightbox.setAttribute("aria-hidden", "false");
   }
   function stopVideo() {
-    lbVideo.pause();
-    if (lbVideo.getAttribute("src")) {
-      lbVideo.removeAttribute("src");
-      lbVideo.load();
-    }
+    videoPlayback.stop();
   }
 
   function resumeBackgroundMusic() {
