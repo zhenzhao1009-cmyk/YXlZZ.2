@@ -168,7 +168,7 @@ window.SITE_CONFIG = {
   /* ---------- 镜头 ---------- */
   scene: {
     tilt: -23.5,            // 俯视角度
-    cameraDistance: 1.95, // 眼点到圆心的距离 / 半径
+    cameraDistance: 2.12, // 眼点到圆心的距离 / 半径
     autoRotate: true,
     autoSpeed: 0.075,     // 持续旋转，按 60 帧基准每帧角度
     friction: 0.93,
