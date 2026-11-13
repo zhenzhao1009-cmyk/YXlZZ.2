@@ -10,6 +10,8 @@
   var maxCount = Math.max(0, Math.min(120, Math.round(requested)));
   var motion = window.matchMedia("(prefers-reduced-motion: reduce)");
   var reduced = motion.matches;
+  var mobile = window.matchMedia("(pointer: coarse)").matches || window.innerWidth < 700;
+  var galleryPaused = false;
   var petals = [], width = 0, height = 0, started = false, frameId = null, last = null, time = 0;
   function random(a, b) { return a + Math.random() * (b - a); }
   function createPetal() {
@@ -25,11 +27,11 @@
   function resize() {
     width = window.innerWidth;
     height = window.innerHeight;
-    var dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    var dpr = Math.min(window.devicePixelRatio || 1, mobile ? 1 : 1.5);
     canvas.width = Math.max(1, Math.round(width * dpr));
     canvas.height = Math.max(1, Math.round(height * dpr));
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    var target = reduced ? Math.min(7, maxCount) : (width < 600 ? Math.min(36, maxCount) : maxCount);
+    var target = reduced ? Math.min(7, maxCount) : (mobile ? Math.min(18, maxCount) : maxCount);
     while (petals.length < target) petals.push(createPetal());
     petals.length = target;
     if (reduced) {
@@ -68,7 +70,11 @@
   }
   function frame(now) {
     frameId = null;
-    if (!started || document.hidden || reduced) return;
+    if (!started || document.hidden || galleryPaused || reduced) return;
+    if (mobile && last !== null && now - last < 1000 / 30 - 0.5) {
+      frameId = requestAnimationFrame(frame);
+      return;
+    }
     var dt = last === null ? 0 : Math.min(0.05, (now - last) / 1000);
     last = now;
     time += dt;
@@ -76,7 +82,7 @@
     frameId = requestAnimationFrame(frame);
   }
   function resume() {
-    if (started && !document.hidden && !reduced && maxCount > 0 && frameId === null) {
+    if (started && !document.hidden && !galleryPaused && !reduced && maxCount > 0 && frameId === null) {
       last = null;
       frameId = requestAnimationFrame(frame);
     }
@@ -94,6 +100,8 @@
     resume();
   });
   window.addEventListener("resize", resize);
+  window.addEventListener("story:gallery:pause", function () { galleryPaused = true; stop(); });
+  window.addEventListener("story:gallery:resume", function () { galleryPaused = false; resume(); });
   document.addEventListener("visibilitychange", function () {
     if (document.hidden) stop(); else resume();
   });

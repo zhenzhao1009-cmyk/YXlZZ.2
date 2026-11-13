@@ -1,6 +1,24 @@
 /* Software video decoding for preview windows without native media support. */
 (function () {
   "use strict";
+  var decoderPromise = null;
+  function loadDecoder() {
+    if (typeof JSMpeg !== "undefined") return Promise.resolve(JSMpeg);
+    if (!decoderPromise) {
+      decoderPromise = new Promise(function (resolve, reject) {
+        var script = document.createElement("script");
+        script.src = "js/vendor/jsmpeg.min.js";
+        script.async = true;
+        script.onload = function () {
+          if (typeof JSMpeg !== "undefined") resolve(JSMpeg);
+          else { decoderPromise = null; reject(new Error("Video decoder unavailable")); }
+        };
+        script.onerror = function () { decoderPromise = null; reject(new Error("Video decoder download failed")); };
+        document.head.appendChild(script);
+      });
+    }
+    return decoderPromise;
+  }
   window.createSoftwareVideo = function (onNotice) {
     var box = document.getElementById("lbSoftware");
     var canvas = document.getElementById("lbCanvas");
@@ -77,7 +95,9 @@
           onNotice("视频加载失败，请检查网络后再试");
         });
       };
-      player = new JSMpeg.Player(media.software, {
+      loadDecoder().then(function (decoder) {
+        if (session !== generation) return;
+        player = new decoder.Player(media.software, {
         canvas: canvas, source: Source, autoplay: false, loop: false,
         disableWebAssembly: true, disableGl: true, pauseWhenHidden: false,
         onPause: function () { if (session === generation) button.textContent = "播放"; },
@@ -88,6 +108,11 @@
           status.textContent = "这一段回忆，想再看一遍。";
           update();
         }
+        });
+      }).catch(function () {
+        if (session !== generation) return;
+        status.textContent = "这段回忆还没加载成功，请关闭后重试。";
+        onNotice("视频加载失败，请检查网络后再试");
       });
     }
     button.addEventListener("click", function () {

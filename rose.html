@@ -128,6 +128,7 @@
     });
   })();
   var EMBED = Q.embed === '1';
+  var LITE = Q.lite === '1';
   var embeddedLayout = null;
   if (EMBED) document.documentElement.classList.add('embedded');
   var FREEZE = (Q.t !== undefined && isFinite(parseFloat(Q.t))) ? parseFloat(Q.t) : null;
@@ -136,9 +137,9 @@
   try { reduce = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
 
   var CFG = {
-    density:   reduce ? 0.45 : 1.0,
+    density:   reduce ? 0.45 : (LITE ? 0.32 : 1.0),
     petalBase: 430,
-    bloom:     !reduce,
+    bloom:     !reduce && !LITE,
     fit:       0.40,
     cy:        0.44
   };
@@ -490,7 +491,7 @@
     if (EMBED && embeddedLayout) DPR = embeddedLayout.pixelRatio;
     if (EMBED) {
       // 大屏控制像素总量，低帧率时降分辨率而不减少花瓣粒子。
-      DPR = Math.min(DPR * rasterScale, Math.sqrt(2800000 / Math.max(1, W * H)));
+      DPR = Math.min(DPR * rasterScale, Math.sqrt((LITE ? 700000 : 2800000) / Math.max(1, W * H)));
     }
     roseWidth = EMBED && embeddedLayout ? embeddedLayout.width : W;
     roseHeight = EMBED && embeddedLayout ? embeddedLayout.height : H;
@@ -685,7 +686,14 @@
 
   /* ===================== 主循环 ===================== */
   var t0 = 0, T = 0, prev = 0;
+  var frameId = null, embeddedPaused = false, lastPaint = 0;
   var slow = 0, quality = 2, rasterScale = 1;
+
+  function scheduleFrame() {
+    if (started && !document.hidden && !embeddedPaused && frameId === null) {
+      frameId = requestAnimationFrame(frame);
+    }
+  }
 
   // 调试面板
   var DBG = Q.debug === '1';
@@ -694,7 +702,15 @@
   var fpsAcc = 0, fpsN = 0, fpsShow = 0, dbgTick = 0;
 
   function frame(now) {
+    frameId = null;
+    if (document.hidden || embeddedPaused) return;
+    if (LITE && lastPaint && now - lastPaint < 1000 / 30 - 0.5) {
+      scheduleFrame();
+      return;
+    }
+    lastPaint = now;
     if (!t0) { t0 = now; prev = now; }
+    if (!prev) prev = now;
     var dt = (now - prev) / 1000;
     prev = now;
     if (dt > 0.2) dt = 0.2;
@@ -715,7 +731,7 @@
     }
 
     if (FREEZE === null) {
-      if (dt > 0.027) slow++; else slow = Math.max(0, slow - 0.5);
+      if (dt > (LITE ? 0.050 : 0.027)) slow++; else slow = Math.max(0, slow - 0.5);
       var slowLimit = EMBED ? 12 : 90;
       if (slow > slowLimit && quality === 2) { quality = 1; slow = 0; }
       else if (slow > slowLimit && quality === 1) {
@@ -862,7 +878,7 @@
     /* 点击涟漪 */
     drawRipples(dt);
 
-    if (!(EMBED && reduce)) requestAnimationFrame(frame);
+    if (!(EMBED && reduce)) scheduleFrame();
   }
 
   /* ===================== 启动 ===================== */
@@ -874,6 +890,16 @@
     window.addEventListener("message", function (event) {
       if (event.source !== parent) return;
       var data = event.data;
+      if (data && data.type === "story:rose:visibility") {
+        embeddedPaused = !data.visible;
+        if (embeddedPaused && frameId !== null) {
+          cancelAnimationFrame(frameId);
+          frameId = null;
+        }
+        prev = 0;
+        if (!embeddedPaused) scheduleFrame();
+        return;
+      }
       if (data && data.type === "story:rose:layout") {
         if (typeof data.width !== "number" || !isFinite(data.width) || data.width <= 0 || data.width > 20000 ||
             typeof data.height !== "number" || !isFinite(data.height) || data.height <= 0 || data.height > 20000 ||
@@ -881,19 +907,28 @@
             typeof data.pixelRatio !== "number" || !isFinite(data.pixelRatio) || data.pixelRatio < 0.1 || data.pixelRatio > 2) return;
         embeddedLayout = data;
         resize();
-        if (started && reduce) requestAnimationFrame(frame);
+        if (started && reduce) scheduleFrame();
         return;
       }
       if (data !== "story:rose:start" || started) return;
       started = true;
-      requestAnimationFrame(frame);
+      scheduleFrame();
     });
     parent.postMessage("story:rose:ready", "*");
   } else {
-    requestAnimationFrame(frame);
+    scheduleFrame();
   }
   if (EMBED && reduce) window.addEventListener("resize", function () {
-    if (started) requestAnimationFrame(frame);
+    if (started) scheduleFrame();
+  });
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) {
+      if (frameId !== null) cancelAnimationFrame(frameId);
+      frameId = null;
+    } else {
+      prev = 0;
+      scheduleFrame();
+    }
   });
 })();
 </script>

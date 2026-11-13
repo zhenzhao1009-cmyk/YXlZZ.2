@@ -10,6 +10,16 @@
   var SCENE = CFG.scene || {};
   var LAY = CFG.layout || {};
   var INTRO = CFG.intro || {};
+  var MOBILE = window.matchMedia("(pointer: coarse)").matches || window.innerWidth < 700;
+  var ATLAS = CFG.mobileAtlas || {};
+  var atlasImage = null;
+  var atlasReady = false;
+  var atlasFailed = false;
+  var pendingAtlasFaces = [];
+  var rowAnimations = [];
+  var frameId = null;
+  var effectsActive = null;
+  var viewCache = {};
 
   function num(v, d) { return typeof v === "number" && isFinite(v) ? v : d; }
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
@@ -94,6 +104,59 @@
   var lbIndex = 0;
   var entered = false;
 
+  function requestRender() {
+    if (frameId === null && !document.hidden) frameId = requestAnimationFrame(tick);
+  }
+
+  function writeView(key, element, property, value) {
+    if (viewCache[key] === value) return;
+    viewCache[key] = value;
+    if (property.indexOf("--") === 0) element.style.setProperty(property, value);
+    else element.style[property] = value;
+  }
+
+  function updateActivity() {
+    var visible = entered && !document.hidden && !(MOBILE && lightbox.classList.contains("open"));
+    var spinning = visible && autoRotate && !OPT.reducedMotion;
+    rowAnimations.forEach(function (animation) {
+      if (spinning && animation.playState !== "running") animation.play();
+      else if (!spinning && animation.playState !== "paused") animation.pause();
+    });
+    if (effectsActive === visible) return;
+    effectsActive = visible;
+    window.dispatchEvent(new Event(visible ? "story:gallery:resume" : "story:gallery:pause"));
+    var rose = document.getElementById("centerRose");
+    if (rose && rose.contentWindow) {
+      rose.contentWindow.postMessage({ type: "story:rose:visibility", visible: visible }, "*");
+    }
+  }
+
+  function applyAtlas(face, index) {
+    face.style.backgroundImage = 'url("' + ATLAS.src + '")';
+    face.style.backgroundSize = (ATLAS.columns * 100) + "% " + (ATLAS.rows * 100) + "%";
+    face.style.backgroundPosition = ((index % ATLAS.columns) * 100 / (ATLAS.columns - 1)) + "% " +
+      (Math.floor(index / ATLAS.columns) * 100 / (ATLAS.rows - 1)) + "%";
+    face.classList.add("atlas-face");
+  }
+
+  function prepareAtlas() {
+    if (!MOBILE || !ATLAS.src || atlasImage) return;
+    atlasImage = new Image();
+    atlasImage.decoding = "async";
+    atlasImage.fetchPriority = "high";
+    atlasImage.onload = function () {
+      atlasReady = true;
+      pendingAtlasFaces.forEach(function (entry) { applyAtlas(entry.face, entry.index); });
+      pendingAtlasFaces = [];
+    };
+    atlasImage.onerror = function () {
+      atlasFailed = true;
+      pendingAtlasFaces.forEach(function (entry) { entry.image.src = entry.fallback; });
+      pendingAtlasFaces = [];
+    };
+    atlasImage.src = ATLAS.src;
+  }
+
   /* =========================================================
      兜底图
      ========================================================= */
@@ -133,7 +196,7 @@
       type: "story:rose:layout",
       width: frameWidth * 0.60, height: frameWidth * 0.56,
       center: portrait ? 0.47 : 0.55,
-      pixelRatio: (P / cameraDistance) * Math.min(window.devicePixelRatio || 1, 1.5)
+      pixelRatio: (P / cameraDistance) * Math.min(window.devicePixelRatio || 1, MOBILE ? 1 : 1.5)
     };
     updateRoseCanvas(true);
   }
@@ -146,7 +209,7 @@
     var root = document.documentElement.style;
     root.setProperty("--rose-canvas-w", (window.innerWidth * cameraDistance / P / coverage).toFixed(2) + "px");
     root.setProperty("--rose-canvas-h", (window.innerHeight * cameraDistance / P / coverage).toFixed(2) + "px");
-    roseLayout.pixelRatio = (P / cameraDistance) * Math.min(window.devicePixelRatio || 1, 1.5) * coverage / 0.78;
+    roseLayout.pixelRatio = (P / cameraDistance) * Math.min(window.devicePixelRatio || 1, MOBILE ? 1 : 1.5) * coverage / 0.78;
     syncCenterRoseLayout();
   }
 
@@ -159,7 +222,11 @@
 
   /* ---------- 三圈照片与第四圈视频 ---------- */
   function build() {
+    var spinTime = rowAnimations.length ? rowAnimations[0].currentTime || 0 : 0;
+    rowAnimations.forEach(function (animation) { animation.cancel(); });
+    rowAnimations = [];
     world.innerHTML = "";
+    pendingAtlasFaces = [];
     items = [];
     rowLayers = [];
 
@@ -172,6 +239,15 @@
       rowLayer.className = "photo-row";
       rowLayer.setAttribute("data-row", String(r + 1));
       rowLayers.push(rowLayer);
+      if (rowLayer.animate && !OPT.reducedMotion && Math.abs(OPT.autoSpeed) > 0) {
+        var direction = r % 2 === 0 ? -1 : 1;
+        var animation = rowLayer.animate([
+          { transform: "rotateY(0deg)" },
+          { transform: "rotateY(" + (direction * 360) + "deg)" }
+        ], { duration: 360000 / (Math.abs(OPT.autoSpeed) * 60), iterations: Infinity });
+        animation.currentTime = spinTime;
+        rowAnimations.push(animation);
+      }
       fragment.appendChild(rowLayer);
       var videoRow = videos.length > 0 && r === OPT.rows - 1;
       var count = videoRow ? videos.length : OPT.perRow;
@@ -190,6 +266,8 @@
     world.appendChild(fragment);
     applyTransforms();
     applyRowRotations();
+    updateActivity();
+    requestRender();
   }
 
   function makeCard(p, theta, y) {
@@ -210,8 +288,13 @@
       img.decoding = "async";
       img.draggable = false;
       img.onerror = function () { this.onerror = null; this.src = FALLBACK; };
-      img.src = p.poster || p.thumbnail || p.src;
+      var useAtlas = MOBILE && !atlasFailed && ATLAS.src && typeof p.atlasIndex === "number";
+      img.src = useAtlas ? p.preview || FALLBACK : p.poster || p.thumbnail || p.src;
       face.appendChild(img);
+      if (useAtlas) {
+        if (atlasReady) applyAtlas(face, p.atlasIndex);
+        else pendingAtlasFaces.push({ face: face, index: p.atlasIndex, image: img, fallback: p.poster || p.thumbnail || p.src });
+      }
       if (p.cap) {
         var cap = document.createElement("span");
         cap.className = "cap";
@@ -232,11 +315,13 @@
   function applyTransforms() {
     for (var i = 0; i < items.length; i++) {
       var it = items[i];
+      it.y = (it.row - (OPT.rows - 1) / 2) * rowPitch;
       it.el.style.transform = transformFor(it.theta, it.y);
     }
   }
 
   function applyRowRotations() {
+    if (rowAnimations.length) return;
     for (var r = 0; r < rowLayers.length; r++) {
       // 从上方看：负 Y 转角为顺时针；中间一排反向。
       var direction = r % 2 === 0 ? -1 : 1;
@@ -248,10 +333,12 @@
      渲染循环
      ========================================================= */
   function tick(time) {
+    frameId = null;
+    if (document.hidden) return;
     var delta = lastFrame ? clamp((time - lastFrame) / (1000 / 60), 0, 3) : 1;
     lastFrame = time;
     // 各排的自动相位独立推进，拖动、惯性、缩放、复位和大图均不打断。
-    if (autoRotate && entered && !OPT.reducedMotion) {
+    if (!rowAnimations.length && autoRotate && entered && effectsActive && !OPT.reducedMotion) {
       autoRotation += Math.abs(OPT.autoSpeed) * delta;
     }
     if (!dragging && !lightbox.classList.contains("open")) {
@@ -281,20 +368,22 @@
     if (!dragging && !resetView) rotation %= 360;
     cameraOffset = P - cameraDistance / zoom;
     updateRoseCanvas(false);
-    stageWrap.style.setProperty("--pan-x", (panX * window.innerWidth).toFixed(2) + "px");
-    stageWrap.style.setProperty("--pan-y", (panY * window.innerHeight).toFixed(2) + "px");
-    cylinder.style.transform =
-      "translateZ(" + cameraOffset.toFixed(2) + "px) rotateX(" + viewTilt.toFixed(3) + "deg)";
+    writeView("panX", stageWrap, "--pan-x", (panX * window.innerWidth).toFixed(2) + "px");
+    writeView("panY", stageWrap, "--pan-y", (panY * window.innerHeight).toFixed(2) + "px");
+    writeView("camera", cylinder, "transform",
+      "translateZ(" + cameraOffset.toFixed(2) + "px) rotateX(" + viewTilt.toFixed(3) + "deg)");
     // 玫瑰与照片共享三维圆心，抵消俯仰以始终朝向镜头。
-    cylinder.style.setProperty("--rose-facing", (-viewTilt).toFixed(3) + "deg");
-    world.style.transform = "rotateY(" + rotation.toFixed(3) + "deg)";
-    requestAnimationFrame(tick);
+    writeView("rose", cylinder, "--rose-facing", (-viewTilt).toFixed(3) + "deg");
+    writeView("rotation", world, "transform", "rotateY(" + rotation.toFixed(3) + "deg)");
+    if ((!lightbox.classList.contains("open") && (dragging || resetView || velocity || tiltVelocity || zoom !== targetZoom)) ||
+        (!rowAnimations.length && autoRotate && entered && effectsActive && !OPT.reducedMotion)) requestRender();
   }
 
   /* =========================================================
      交互：单指 / 鼠标转动视角，双指 / 滚轮缩放
      ========================================================= */
   function beginInteraction() {
+    requestRender();
     resetView = null;
     hideHint();
   }
@@ -457,6 +546,7 @@
     lbMessage.hidden = !it.message;
     lightbox.classList.add("open");
     lightbox.setAttribute("aria-hidden", "false");
+    updateActivity();
   }
   function navigateLightbox(step) {
     if (!items.length) return;
@@ -485,6 +575,8 @@
     resumeBackgroundMusic();
     lightbox.classList.remove("open");
     lightbox.setAttribute("aria-hidden", "true");
+    updateActivity();
+    requestRender();
   }
 
   function pickCard(x, y) {
@@ -509,6 +601,8 @@
     btnReset.addEventListener("click", restoreView);
     btnRotate.addEventListener("click", function () {
       autoRotate = !autoRotate;
+      updateActivity();
+      requestRender();
       btnRotate.classList.toggle("off", !autoRotate);
       toast(autoRotate ? "自动旋转已开启" : "自动旋转已暂停");
     });
@@ -617,6 +711,9 @@
 
   function startCenterRose() {
     syncCenterRoseLayout();
+    effectsActive = null;
+    updateActivity();
+    requestRender();
     if (entered) window.dispatchEvent(new Event("story:entered"));
     var roseFrame = document.getElementById("centerRose");
     if (entered && roseFrame && roseFrame.contentWindow) {
@@ -631,6 +728,7 @@
       window.addEventListener("message", function (event) {
         if (event.source === roseFrame.contentWindow && event.data === "story:rose:ready") startCenterRose();
       });
+      roseFrame.src = "rose.html?embed=1" + (MOBILE ? "&lite=1" : "") + "&v=mobile1";
     }
     document.getElementById("introKicker").textContent = INTRO.kicker || "给我们的两周年";
     document.getElementById("introHeading").textContent = INTRO.heading || "两年啦，还是好喜欢你。";
@@ -686,6 +784,7 @@
 
     computeSize();
     build();
+    prepareAtlas();
     if (OPT.music) {
       music = window.createBackgroundMusic(bgm, btnMusic, {
         source: OPT.music,
@@ -716,11 +815,22 @@
       clearTimeout(rt);
       rt = setTimeout(function () {
         computeSize();
-        build();
+        applyTransforms();
+        requestRender();
       }, 160);
     });
 
-    requestAnimationFrame(tick);
+    document.addEventListener("visibilitychange", function () {
+      updateActivity();
+      if (document.hidden) {
+        if (frameId !== null) cancelAnimationFrame(frameId);
+        frameId = null;
+      } else {
+        lastFrame = 0;
+        requestRender();
+      }
+    });
+    requestRender();
   }
 
   if (document.readyState === "loading") {
