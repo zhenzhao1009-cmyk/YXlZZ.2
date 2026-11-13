@@ -184,7 +184,7 @@
         var p = videoRow ? videos[i] : photos[(r * OPT.perRow + i) % n];
         var el = makeCard(p, theta, yBase);
         rowLayer.appendChild(el);
-        items.push({ el: el, theta: theta, y: yBase, src: p.src, cap: p.cap || "", message: p.message || "", type: videoRow ? "video" : "photo", poster: p.poster || "", webm: p.webm || "", software: p.software || "", duration: p.duration || 0 });
+        items.push({ el: el, row: r, theta: theta, y: yBase, src: p.src, cap: p.cap || "", message: p.message || "", type: videoRow ? "video" : "photo", poster: p.poster || "", webm: p.webm || "", software: p.software || "", duration: p.duration || 0 });
       }
     }
     world.appendChild(fragment);
@@ -458,6 +458,18 @@
     lightbox.classList.add("open");
     lightbox.setAttribute("aria-hidden", "false");
   }
+  function navigateLightbox(step) {
+    if (!items.length) return;
+    var row = items[lbIndex].row;
+    var rowIndices = [];
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].row === row) rowIndices.push(i);
+    }
+    var index = rowIndices.indexOf(lbIndex);
+    var next = ((index + step) % rowIndices.length + rowIndices.length) % rowIndices.length;
+    openLightbox(rowIndices[next]);
+  }
+
   function stopVideo() {
     videoPlayback.stop();
   }
@@ -520,8 +532,8 @@
       if (e.target.hasAttribute && e.target.hasAttribute("data-close")) closeLightbox();
     });
     document.getElementById("lbClose").addEventListener("click", closeLightbox);
-    document.getElementById("lbPrev").addEventListener("click", function () { openLightbox(lbIndex - 1); });
-    document.getElementById("lbNext").addEventListener("click", function () { openLightbox(lbIndex + 1); });
+    document.getElementById("lbPrev").addEventListener("click", function () { navigateLightbox(-1); });
+    document.getElementById("lbNext").addEventListener("click", function () { navigateLightbox(1); });
 
     world.addEventListener("keydown", function (e) {
       if (e.key === "Enter" || e.key === " ") e.stopPropagation();
@@ -542,8 +554,8 @@
       if ((e.key === " " || e.key === "Enter") && e.target.closest && e.target.closest("button")) return;
       if (lightbox.classList.contains("open")) {
         if (e.key === "Escape") closeLightbox();
-        if (e.key === "ArrowLeft") openLightbox(lbIndex - 1);
-        if (e.key === "ArrowRight") openLightbox(lbIndex + 1);
+        if (e.key === "ArrowLeft") navigateLightbox(-1);
+        if (e.key === "ArrowRight") navigateLightbox(1);
         return;
       }
       if (!entered) return;
