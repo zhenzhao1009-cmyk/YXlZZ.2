@@ -733,22 +733,18 @@
       window.addEventListener("message", function (event) {
         if (event.source === roseFrame.contentWindow && event.data === "story:rose:ready") startCenterRose();
       });
-      roseFrame.src = "rose.html?embed=1&fps=" + TARGET_FPS + (MOBILE ? "&lite=1" : "") + "&v=all120";
+      roseFrame.src = "rose.html?embed=1&fps=" + TARGET_FPS + (MOBILE ? "&lite=1" : "") + "&v=3.0";
     }
     document.getElementById("introKicker").textContent = INTRO.kicker || "给我们的两周年";
     document.getElementById("introHeading").textContent = INTRO.heading || "两年啦，还是好喜欢你。";
-    var introNote = document.getElementById("introNote");
-    var introSign = document.getElementById("introSign");
-    introNote.textContent = CFG.note || "";
-    introSign.textContent = CFG.sign || "";
-    introNote.hidden = !CFG.note;
-    introSign.hidden = !CFG.sign;
 
     // 调试用：?enter=1 直接跳过开场
     var qs = (location.search || "").toLowerCase();
     var skip = qs.indexOf("enter=1") >= 0 || qs.indexOf("skipintro=1") >= 0;
 
     if (INTRO.show === false || skip) {
+      if (window.stopIntroHeart) window.stopIntroHeart();
+      if (window.stopLoveClock) window.stopLoveClock();
       enterEl.style.display = "none";
       entered = true;
       roseRevealed = true;
@@ -764,23 +760,47 @@
       if (opening) return;
       opening = true;
       enterBtn.disabled = true;
+      if (window.stopIntroHeart) window.stopIntroHeart();
+      if (window.stopLoveClock) window.stopLoveClock();
       playMusic(); // Keep audio permission in the original user gesture.
       enterEl.classList.add("gone");
       enterEl.inert = true;
       setTimeout(function () { enterEl.style.display = "none"; }, 350);
       stageWrap.inert = true;
       document.querySelector(".controls").inert = true;
-      function reveal() {
+      var wallReady = false, ceremonyDone = false, galleryOpened = false, assembly = null;
+      function openCompletedGallery() {
+        if (!wallReady || !ceremonyDone || galleryOpened) return;
+        galleryOpened = true;
         entered = true;
-        startCenterRose();
-      }
-      function complete() {
         roseRevealed = true;
         startCenterRose();
         stageWrap.inert = false;
         document.querySelector(".controls").inert = false;
         document.getElementById("btnRotate").focus({preventScroll:true});
         if (OPT.hintAutoHide > 0) setTimeout(hideHint, OPT.hintAutoHide);
+      }
+      function reveal(state) {
+        if ((state && state.skip) || OPT.reducedMotion || document.hidden || !window.assembleGallery) {
+          wallReady = true;
+          openCompletedGallery();
+          return;
+        }
+        assembly = window.assembleGallery({
+          items: items,
+          getLayout: function () {
+            return { width: window.innerWidth, height: window.innerHeight, radius: R,
+              perspective: P, distance: cameraDistance / zoom, tilt: viewTilt,
+              center: window.innerHeight > window.innerWidth ? .47 : .55, cardWidth: cardW, cardHeight: cardH };
+          },
+          onComplete: function () { wallReady = true; openCompletedGallery(); }
+        });
+      }
+      function complete(state) {
+        ceremonyDone = true;
+        if (assembly && state && state.skip) assembly.finish();
+        openCompletedGallery();
+        if (assembly && !wallReady) assembly.focus();
       }
       if (playCeremony) playCeremony(reveal, complete);
       else { reveal(); complete(); }

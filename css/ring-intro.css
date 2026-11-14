@@ -17,7 +17,7 @@
 .ceremony-active .controls,.ceremony-active .hint,.ceremony-active .topbar{visibility:hidden;}
 .ceremony-active .petal-atmosphere{opacity:0;}
 .ceremony-reveal .stage-wrap{opacity:1;transition:opacity .35s ease;}
-.ceremony-reveal .ring-ceremony{background:transparent;}
+.ceremony-reveal .ring-ceremony{background:transparent;pointer-events:none;}
 .ceremony-reveal .ceremony-halo{opacity:0;}
 .ceremony-reveal .ceremony-skip{opacity:0;pointer-events:none;}
 @media(max-width:600px){

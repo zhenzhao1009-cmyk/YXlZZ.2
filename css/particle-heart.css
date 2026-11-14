@@ -1,0 +1,17 @@
+:root { color-scheme: dark; background: #000; font-family: "Microsoft YaHei", sans-serif; }
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; }
+.heart-scene { position: relative; width: 100%; height: 100%; min-height: 240px; background: #000; }
+#particleHeart { display: block; width: 100%; height: 100%; touch-action: manipulation; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+#particleHeart:focus-visible { outline: 1px solid #a35c80; outline-offset: -8px; }
+.heart-tools { position: absolute; bottom: max(28px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 15px; white-space: nowrap; }
+.heart-tools p { margin: 0; color: #896975; font-size: 11px; font-weight: 400; letter-spacing: 3px; user-select: none; }
+.heart-tools p span { padding: 0 6px; color: #4e3644; }
+.heart-actions { display: flex; gap: 10px; }
+.heart-actions button { display: grid; place-items: center; width: 44px; height: 44px; padding: 12px; border: 1px solid #32202b; border-radius: 50%; background: #0c070b; color: #b8879d; cursor: pointer; transition: background .2s, border-color .2s; }
+.heart-actions button:hover { background: #21101b; border-color: #89506f; }
+.heart-actions button:focus-visible { outline: 2px solid #f3b2d3; outline-offset: 4px; }
+.heart-actions svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.heart-actions .play-icon, .heart-actions [aria-pressed="true"] .pause-icon { display: none; }
+.heart-actions [aria-pressed="true"] .play-icon { display: block; }
+@media (max-height: 480px) { .heart-tools { bottom: 12px; flex-direction: row; gap: 22px; } }

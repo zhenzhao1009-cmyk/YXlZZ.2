@@ -1,14 +1,14 @@
 /* Manga hands drawn as living particles; the ring uses the gallery's own photos. */
 (function () {
   "use strict";
-  var overlay, canvas, ctx, particles, pictures = [], prepared = false, playing = false;
+  var overlay, canvas, ctx, particles, maleDepthMask=null, pictures = [], prepared = false, playing = false;
   var MOBILE = window.matchMedia("(pointer: coarse)").matches || window.innerWidth < 700;
   var DURATION = 8200;
   var WEAR_END = DURATION * .55;
   var SCATTER_AT = WEAR_END + 1000;
   var SCATTER_DURATION = 1600;
-  var REVEAL_AT = SCATTER_AT + SCATTER_DURATION;
-  var END_AT = REVEAL_AT + 350;
+  var REVEAL_AT = SCATTER_AT + SCATTER_DURATION - 300;
+  var END_AT = SCATTER_AT + SCATTER_DURATION + 350;
   var TAU = Math.PI * 2;
   function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
   function mix(a, b, t) { return a + (b - a) * t; }
@@ -16,25 +16,37 @@
   function random(seed) {
     return function () { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
   }
+  function polishHandParticles(dots,isMale){
+    var unique=new Map(),other=[];
+    function finger(dot){return isMale?(dot.x>260&&dot.y>205&&dot.y<470):(dot.x<880&&dot.y>210&&dot.y<510);}
+    dots.forEach(function(dot){
+      if(!finger(dot)){other.push(dot);return;}
+      var key=dot.x+","+dot.y,existing=unique.get(key);
+      if(!existing||dot.strength>existing.strength)unique.set(key,dot);
+    });
+    var fingers=Array.from(unique.values()),grid=new Map(),cell=4;
+    fingers.forEach(function(dot){var key=Math.floor(dot.x/cell)+","+Math.floor(dot.y/cell);if(!grid.has(key))grid.set(key,[]);grid.get(key).push(dot);});
+    fingers.forEach(function(dot){
+      var gx=Math.floor(dot.x/cell),gy=Math.floor(dot.y/cell),neighbours=0;
+      for(var x=gx-1;x<=gx+1;x++)for(var y=gy-1;y<=gy+1;y++){
+        var nearby=grid.get(x+","+y)||[];
+        nearby.forEach(function(p){var dx=p.x-dot.x,dy=p.y-dot.y;if(p!==dot&&dx*dx+dy*dy<10.24)neighbours++;});
+      }
+      var density=clamp(Math.sqrt(5/(neighbours+1)),.64,1);
+      if(neighbours<2&&dot.strength<.6)density*=.45;
+      dot.fingerDetail={alpha:density,size:dot.edge?.62+(dot.phase/TAU)*.15:.42+(dot.phase/TAU)*.14};
+    });
+    return other.concat(fingers);
+  }
   function makeHand(points, colour, seed) {
     var rng=random(seed), dots=[];
     points.forEach(function(p,index){
       if(MOBILE && index%2 && !(p[0]===INDEX_TIP.x&&p[1]===INDEX_TIP.y) && !(p[0]===THUMB_TIP.x&&p[1]===THUMB_TIP.y))return;
       dots.push({x:p[0],y:p[1],edge:!!p[3],strength:p[2]/100,
         phase:rng()*TAU,size:p[3]?.8+rng()*.35:.45+rng()*.35,
-        indexWeight:fingerInfluence({x:p[0],y:p[1]},"index"),
-        thumbWeight:fingerInfluence({x:p[0],y:p[1]},"thumb"),
         driftX:45+rng()*150,driftY:(rng()-.5)*150,delay:rng()*.1});
     });
-    // A fixed-length forearm extends beyond the crop; it moves with the hand as one piece.
-    if(seed===771){
-      for(var i=0;i<(MOBILE?150:300);i++){
-        var x=-rng()*520,edge=i%3===0,y=(edge?(i%2?303+x*.02:520-x*.01):mix(303,520,rng()))+(rng()-.5)*2;
-        dots.push({x:x,y:y,edge:edge,strength:(edge?.65:.25)*Math.exp(x/190),phase:rng()*TAU,size:edge?.8:.5,
-          indexWeight:0,thumbWeight:0,driftX:45+rng()*150,driftY:(rng()-.5)*150,delay:rng()*.1});
-      }
-    }
-    return {dots:dots,colour:colour};
+    return {dots:polishHandParticles(dots,seed===771),colour:colour};
   }
   function prepare(photos) {
     if (prepared) return;
@@ -51,6 +63,11 @@
     try { ctx = canvas.getContext("2d", {alpha:true}); } catch (_) { ctx = null; }
     var models=window.RING_HAND_POINTS;
     if (!ctx || !models || !models.male || !models.female) return;
+    if(typeof Path2D!=="undefined"){
+      var depthCanvas=document.createElement("canvas");depthCanvas.width=768;depthCanvas.height=512;
+      var depthContext=depthCanvas.getContext("2d");
+      if(depthContext){depthContext.scale(.5,.5);depthContext.fillStyle="#000";depthContext.fill(new Path2D("M0 677 C300 621 500 445 715 274 C780 164 820 171 890 176 C970 171 1039 103 1080 107 C1123 108 1177 202 1216 227 C1290 282 1295 324 1346 376 C1374 396 1345 410 1328 396 C1282 387 1242 322 1217 288 C1161 297 1109 280 1085 242 C1045 286 977 299 945 282 C1006 295 1066 310 1097 347 C1127 390 1127 481 1133 495 C1196 480 1266 449 1322 461 C1359 466 1369 511 1322 538 C1204 620 1054 729 905 790 C743 886 638 878 510 852 C308 885 146 978 0 1024 Z"));maleDepthMask=depthCanvas;}
+    }
     particles = {
       male:makeHand(models.male,"205,215,250",771),
       female:makeHand(models.female,"255,205,228",452)
@@ -65,8 +82,9 @@
       pictures.push(image);
     }
   }
-  var INDEX_TIP={x:463,y:318}, THUMB_TIP={x:400,y:427};
-  var FEMALE_WRIST={x:930,y:392};
+  var MALE_GRIP={x:500,y:390};
+  var INDEX_TIP={x:489,y:368.5}, THUMB_TIP={x:483.96,y:389.92};
+  var FEMALE_WRIST={x:1008.2,y:441};
   function rotatePoint(p,pivot,angle){
     var c=Math.cos(angle),s=Math.sin(angle),x=p.x-pivot.x,y=p.y-pivot.y;
     return {x:pivot.x+x*c-y*s,y:pivot.y+x*s+y*c};
@@ -75,63 +93,14 @@
     var q=rotatePoint(p,FEMALE_WRIST,pose.angle);
     return {x:q.x+pose.dx,y:q.y+pose.dy};
   }
-  var PALM_PIVOT={x:265,y:365};
-  var INDEX_CHAIN={root:{x:250,y:242},joint:{x:366,y:273},tip:INDEX_TIP,bend:-1};
-  var THUMB_CHAIN={root:{x:210,y:418},joint:{x:315,y:426},tip:THUMB_TIP,bend:1};
-  // Bind only the active finger surfaces; the three folded fingers keep their resting pose.
-  var INDEX_AREA=[[242,205],[330,210],[390,250],[435,283],[477,304],[478,335],[441,337],[404,318],[367,306],[337,288],[300,289],[269,293],[242,290]];
-  var THUMB_AREA=[[205,385],[275,384],[338,391],[385,398],[409,415],[411,445],[380,455],[330,463],[275,477],[220,487],[205,460]];
-  function insidePolygon(p,polygon){
-    var inside=false;for(var i=0,j=polygon.length-1;i<polygon.length;j=i++){
-      var a=polygon[i],b=polygon[j];
-      if((a[1]>p.y)!==(b[1]>p.y)&&p.x<(b[0]-a[0])*(p.y-a[1])/(b[1]-a[1])+a[0])inside=!inside;
-    }return inside;
-  }
-  function fingerInfluence(p,finger){
-    var area=finger==="index"?INDEX_AREA:THUMB_AREA;
-    return insidePolygon(p,area)?smooth(finger==="index"?240:210,finger==="index"?290:265,p.x):0;
-  }
+  // Move the anatomically correct hand as one piece; finger proportions never warp.
   function maleBase(p,pose){
-    var q=rotatePoint(p,PALM_PIVOT,pose.angle);
+    var q=rotatePoint(p,MALE_GRIP,pose.angle);
     return {x:q.x+pose.dx,y:q.y+pose.dy};
   }
-  function inverseMale(p,pose){return rotatePoint({x:p.x-pose.dx,y:p.y-pose.dy},PALM_PIVOT,-pose.angle);}
-  // Solve a two-joint chain using rotations only: both segment lengths are constant.
-  function solveFinger(chain,target){
-    var a=chain.root,b=chain.joint,c=chain.tip;
-    var l1=Math.hypot(b.x-a.x,b.y-a.y),l2=Math.hypot(c.x-b.x,c.y-b.y);
-    var dx=target.x-a.x,dy=target.y-a.y,distance=Math.hypot(dx,dy);
-    var reach=clamp(distance,Math.abs(l1-l2)+.01,l1+l2-.01),direction=Math.atan2(dy,dx);
-    var bend=Math.acos(clamp((l1*l1+reach*reach-l2*l2)/(2*l1*reach),-1,1));
-    var proximal=direction+chain.bend*bend;
-    var elbow={x:a.x+Math.cos(proximal)*l1,y:a.y+Math.sin(proximal)*l1};
-    var end={x:a.x+Math.cos(direction)*reach,y:a.y+Math.sin(direction)*reach};
-    return {chain:chain,joint:elbow,tip:end,lengths:[l1,l2],
-      first:proximal-Math.atan2(b.y-a.y,b.x-a.x),
-      second:Math.atan2(end.y-elbow.y,end.x-elbow.x)-Math.atan2(c.y-b.y,c.x-b.x)};
-  }
-  function fingerPoint(p,bone){
-    var joint=bone.chain.joint;
-    var blend=bone.chain===INDEX_CHAIN?45:32;
-    var along=smooth(joint.x-blend,joint.x+blend,p.x);
-    var angle=mix(bone.first,bone.second,along);
-    var q=rotatePoint(p,joint,angle);
-    return {x:q.x+bone.joint.x-joint.x,y:q.y+bone.joint.y-joint.y};
-  }
-  function malePoint(p,pose){
-    var wi=p.indexWeight===undefined?fingerInfluence(p,"index"):p.indexWeight;
-    var wt=p.thumbWeight===undefined?fingerInfluence(p,"thumb"):p.thumbWeight;
-    var local={x:p.x,y:p.y};
-    if(wi>0){var index=fingerPoint(p,pose.indexBone);local.x+=wi*(index.x-p.x);local.y+=wi*(index.y-p.y);}
-    if(wt>0){var thumb=fingerPoint(p,pose.thumbBone);local.x+=wt*(thumb.x-p.x);local.y+=wt*(thumb.y-p.y);}
-    return maleBase(local,pose);
-  }
+  function malePoint(p,pose){return maleBase(p,pose);}
   // Upper/lower edges measured from the actual female particle silhouette.
-  var FINGER_PROFILE=[
-    [531,393,399],[545,391.5,411],[560,389,417],[580,388.5,418],
-    [600,384,417],[620,381,414],[640,378,413.5],[660,374,412],
-    [680,375,410],[700,364,406.5],[720,354.5,405],[740,353,405.5]
-  ];
+  var FINGER_PROFILE=[[560,403.92,406.08],[569,396.36,415.8],[590.6,393.48,418.68],[619.4,393.12,417.96],[648.2,391.32,418.68],[677,388.8,421.2],[705.8,390.96,423],[727.4,389.16,423.72],[738.2,384.84,426.6]];
   function profileAt(x){
     var i=0;while(i<FINGER_PROFILE.length-2&&x>FINGER_PROFILE[i+1][0])i++;
     var a=FINGER_PROFILE[i],b=FINGER_PROFILE[i+1],prev=FINGER_PROFILE[Math.max(0,i-1)],next=FINGER_PROFILE[Math.min(FINGER_PROFILE.length-1,i+2)];
@@ -144,45 +113,39 @@
     var upper=edge(1),lower=edge(2);return {x:x,y:(upper.y+lower.y)/2,top:upper.y,bottom:lower.y,slope:(upper.slope+lower.slope)/2};
   }
   function fingerAt(x){
-    var p=profileAt(Math.max(545,x));p.y+=(x-Math.max(545,x))*p.slope;p.x=x;return p;
+    var start=FINGER_PROFILE[2][0],p=profileAt(Math.max(start,x));p.y+=(x-Math.max(start,x))*p.slope;p.x=x;return p;
   }
   function maskFinger(pose,alpha){
     ctx.save();ctx.globalAlpha=alpha;ctx.globalCompositeOperation="destination-out";ctx.fillStyle="#000";ctx.beginPath();
-    var first=true;
-    for(var x=531;x<=740;x+=3){var p=profileAt(x),q=femalePoint({x:x,y:p.top},pose);if(first){ctx.moveTo(q.x,q.y);first=false;}else ctx.lineTo(q.x,q.y);}
-    for(var x=740;x>=531;x-=3){var p=profileAt(x),q=femalePoint({x:x,y:p.bottom},pose);ctx.lineTo(q.x,q.y);}
+    var first=true,min=FINGER_PROFILE[0][0],max=FINGER_PROFILE[FINGER_PROFILE.length-1][0];
+    for(var x=min;x<=max;x+=3){var p=profileAt(x),q=femalePoint({x:x,y:p.top},pose);if(first){ctx.moveTo(q.x,q.y);first=false;}else ctx.lineTo(q.x,q.y);}
+    for(var x=max;x>=min;x-=3){var p=profileAt(x),q=femalePoint({x:x,y:p.bottom},pose);ctx.lineTo(q.x,q.y);}
     ctx.closePath();ctx.fill();ctx.restore();
   }
+  function maskMaleHand(pose,alpha){
+    if(!maleDepthMask)return;
+    ctx.save();ctx.globalAlpha=alpha;ctx.globalCompositeOperation="destination-out";
+    ctx.translate(pose.dx,pose.dy);ctx.translate(MALE_GRIP.x,MALE_GRIP.y);ctx.rotate(pose.angle);ctx.translate(-MALE_GRIP.x,-MALE_GRIP.y);
+    ctx.translate(-70.86,200.08);ctx.scale(.42,.42);ctx.fillStyle="#000";ctx.drawImage(maleDepthMask,0,0,1536,1024);ctx.restore();
+  }
   function choreography(t,view,seconds){
-    var align=smooth(.04,.22,t),release=smooth(.59,.70,t),retreat=smooth(.65,.79,t);
+    var align=smooth(.04,.22,t);
     var travel=.16*smooth(.22,.31,t)+.58*smooth(.315,.46,t)+.26*smooth(.46,.55,t);
     var settle=Math.sin(smooth(.48,.59,t)*Math.PI)*.8;
     var female={angle:mix(.012,-.012,smooth(.12,.46,t))+.003*Math.sin(seconds*.8),
       dx:(1-align)*35,dy:-3*Math.sin(smooth(.17,.55,t)*Math.PI)+settle};
-    var pathX=mix(507,700,travel)-(1-align)*45,spine=fingerAt(pathX);
+    var startX=FINGER_PROFILE[0][0]-24,wearX=FINGER_PROFILE[FINGER_PROFILE.length-1][0]-14;
+    var pathX=mix(startX,wearX,travel)-(1-align)*45,spine=fingerAt(pathX);
     var onFinger=femalePoint({x:pathX,y:spine.y},female),axisAngle=Math.atan(spine.slope)+female.angle;
-    var tip=femalePoint(fingerAt(535),female),base=femalePoint(fingerAt(700),female);
+    var tip=femalePoint(fingerAt(FINGER_PROFILE[0][0]),female),base=femalePoint(fingerAt(wearX),female);
     var ux=Math.cos(axisAngle),uy=Math.sin(axisAngle),nx=-uy,ny=ux;
     var ringX=onFinger.x,ringY=onFinger.y;
-    var radius=20.5+1.3*Math.sin(travel*Math.PI)+.8*smooth(.7,1,travel),band=24;
-    var index={x:ringX+ux*(-4)-nx*(radius*.92+release*13)-ux*retreat*85,
-      y:ringY+uy*(-4)-ny*(radius*.92+release*13)-uy*retreat*85-retreat*8};
-    var thumb={x:ringX+ux*(-5)+nx*(radius*.92+release*18)-ux*retreat*85,
-      y:ringY+uy*(-5)+ny*(radius*.92+release*18)-uy*retreat*85-retreat*8};
-    var male={angle:.02*Math.sin(travel*Math.PI)-retreat*.05};
-    // Place the palm around a relaxed thumb, instead of forcing the thumb into a hook.
-    var root=THUMB_CHAIN.root,joint=THUMB_CHAIN.joint,tipSource=THUMB_CHAIN.tip;
-    var l1=Math.hypot(joint.x-root.x,joint.y-root.y),l2=Math.hypot(tipSource.x-joint.x,tipSource.y-joint.y);
-    var first=.045+release*.06,second=-.24+release*.18;
-    var relaxedTip={x:root.x+Math.cos(first)*l1+Math.cos(second)*l2,
-      y:root.y+Math.sin(first)*l1+Math.sin(second)*l2};
-    var relaxedWorld=rotatePoint(relaxedTip,PALM_PIVOT,male.angle);
-    male.dx=thumb.x-relaxedWorld.x;male.dy=thumb.y-relaxedWorld.y;
-    male.indexBone=solveFinger(INDEX_CHAIN,inverseMale(index,male));
-    male.thumbBone=solveFinger(THUMB_CHAIN,inverseMale(thumb,male));
+    var radius=21.5,band=24;
+    var male={angle:axisAngle,dx:ringX-MALE_GRIP.x,dy:ringY-MALE_GRIP.y};
+    var index=malePoint(INDEX_TIP,male),thumb=malePoint(THUMB_TIP,male);
     return {female:female,male:male,index:index,thumb:thumb,tip:tip,base:base,travel:travel,
       ringX:ringX,ringY:ringY,radius:radius,band:band,cx:ringX,cy:ringY,
-      angle:axisAngle,pathX:pathX,turn:0,release:release,dissolve:0,zoom:0};
+      angle:axisAngle,pathX:pathX,turn:0,release:0,dissolve:0,zoom:0};
   }
   function hand(handData,pose,opacity,gather,scatter,time,direction,pixelScale){
     if(opacity<.005)return;
@@ -190,14 +153,17 @@
     handData.dots.forEach(function(p){
       var born=smooth(p.delay,p.delay+.65,gather),dissolve=scatter*(1+p.delay),drift=(1-born)+dissolve;
       var q=direction<0?malePoint(p,pose):femalePoint(p,pose);
-      var x=q.x+direction*p.driftX*drift+Math.sin(time*.8+p.phase)*.2;
-      var y=q.y+p.driftY*drift+Math.cos(time*.65+p.phase)*.2;
-      var twinkle=.8+Math.sin(time*1.4+p.phase)*.2;
+      var detail=p.fingerDetail,jitter=detail?.12:.2;
+      var x=q.x+direction*p.driftX*drift+Math.sin(time*.8+p.phase)*jitter;
+      var y=q.y+p.driftY*drift+Math.cos(time*.65+p.phase)*jitter;
+      var twinkle=detail?.9+Math.sin(time+p.phase)*.1:.8+Math.sin(time*1.4+p.phase)*.2;
       var alpha=opacity*born*Math.max(0,1-dissolve)*twinkle*(.48+p.strength*.52);
-      var size=Math.max(p.size,.48/pixelScale);
-      if(p.edge){ctx.globalAlpha=alpha*.10;ctx.beginPath();ctx.arc(x,y,size*2.4,0,TAU);ctx.fill();}
+      if(detail)alpha*=detail.alpha;
+      var size=Math.max(detail?detail.size:p.size,(detail?.42:.48)/pixelScale);
+      if(p.edge){ctx.globalAlpha=alpha*(detail?.045:.10);ctx.beginPath();ctx.arc(x,y,size*(detail?1.85:2.4),0,TAU);ctx.fill();}
       ctx.globalAlpha=alpha*(p.edge?.92:.62);ctx.beginPath();ctx.arc(x,y,size,0,TAU);ctx.fill();
-    });ctx.restore();
+    });
+    ctx.restore();
   }
   function texture(image, p) {
     var w = image.naturalWidth, h = image.naturalHeight;
@@ -363,17 +329,18 @@
       if (playing) return;
       playing = true;
       var skip=overlay.querySelector(".ceremony-skip"), caption=overlay.querySelector(".ceremony-caption");
-      var frameId=null, failsafe=null, finished=false, revealed=false, start=null, lastPaint=-Infinity, view, scatterFrame=null;
+      var frameId=null, failsafe=null, finished=false, revealed=false, skipped=false, start=null, lastPaint=-Infinity, view, scatterFrame=null;
       overlay.hidden=false;document.body.classList.add("ceremony-active");skip.focus({preventScroll:true});
-      function openGallery(){if(revealed)return;revealed=true;document.body.classList.add("ceremony-reveal");reveal();}
+      function openGallery(){if(revealed)return;revealed=true;document.body.classList.add("ceremony-reveal");reveal({skip:skipped});}
       function finish(){
         if(finished)return;finished=true;if(frameId!==null)cancelAnimationFrame(frameId);clearTimeout(failsafe);
         openGallery();overlay.hidden=true;document.body.classList.remove("ceremony-active","ceremony-reveal");
         scatterFrame=null;
-        skip.removeEventListener("click",finish);document.removeEventListener("keydown",onKey);document.removeEventListener("visibilitychange",onVisibility);window.removeEventListener("resize",resize);complete();
+        skip.removeEventListener("click",skipAnimation);document.removeEventListener("keydown",onKey);document.removeEventListener("visibilitychange",onVisibility);window.removeEventListener("resize",resize);complete({skip:skipped});
       }
-      function onKey(e){if(e.key==="Escape")finish();else if(e.key==="Tab"){e.preventDefault();skip.focus({preventScroll:true});}}
-      function onVisibility(){if(document.hidden)finish();}
+      function skipAnimation(){skipped=true;finish();}
+      function onKey(e){if(e.key==="Escape")skipAnimation();else if(e.key==="Tab"){e.preventDefault();skip.focus({preventScroll:true});}}
+      function onVisibility(){if(document.hidden)skipAnimation();}
       function resize(){
         var w=window.innerWidth,h=window.innerHeight,dpr=Math.min(window.devicePixelRatio||1,MOBILE?1.5:2);
         canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);
@@ -402,6 +369,7 @@
           maskFinger(pose.female,handAlpha*gather);
           hand(particles.female,pose.female,handAlpha,gather,pose.dissolve,seconds,1,view.scale);
           drawCards(cards,true);
+          maskMaleHand(pose.male,handAlpha*gather);
           hand(particles.male,pose.male,handAlpha,gather,pose.dissolve,seconds,-1,view.scale);
           var glint=smooth(WEAR_END,WEAR_END+180,elapsed)*(1-smooth(WEAR_END+280,WEAR_END+600,elapsed));
           sparkle(pose.ringX-pose.radius*.14,pose.ringY-pose.radius,glint,seconds);
@@ -421,11 +389,11 @@
         if(elapsed>=END_AT){finish();return;}
         frameId=requestAnimationFrame(paint);
       }
-      skip.addEventListener("click",finish);document.addEventListener("keydown",onKey);document.addEventListener("visibilitychange",onVisibility);
-      if(!ctx||!particles||window.matchMedia("(prefers-reduced-motion: reduce)").matches){finish();return;}
+      skip.addEventListener("click",skipAnimation);document.addEventListener("keydown",onKey);document.addEventListener("visibilitychange",onVisibility);
+      if(!ctx||!particles||window.matchMedia("(prefers-reduced-motion: reduce)").matches){skipAnimation();return;}
       window.addEventListener("resize",resize);resize();overlay.classList.add("is-playing");
       // Background tabs, a lost frame callback, and a failed Canvas must never trap the visitor.
-      failsafe=setTimeout(finish,END_AT+2500);frameId=requestAnimationFrame(paint);
+      failsafe=setTimeout(skipAnimation,END_AT+2500);frameId=requestAnimationFrame(paint);
     };
   };
 })();

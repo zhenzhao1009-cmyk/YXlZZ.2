@@ -1,0 +1,60 @@
+/* The anniversary clock replaces the letter beneath the entry button. */
+.love-clock{
+  --love-digit-w:clamp(24px,3.1vw,40px);
+  --love-digit-h:clamp(40px,4.7vw,62px);
+  display:flex;flex-direction:column;align-items:center;gap:13px;
+  max-width:100%;position:relative;z-index:1;
+  animation:letterReveal 1.2s var(--ease) both .15s;
+}
+.love-clock-heading{font-size:11px;line-height:1.7;font-weight:400;letter-spacing:.2em;text-indent:.2em;color:#caa6b9;}
+.love-clock-display{display:flex;align-items:flex-start;justify-content:center;gap:clamp(7px,1.3vw,14px);max-width:100%;visibility:hidden;}
+.love-clock[data-ready="true"] .love-clock-display{visibility:visible;}
+.love-clock-unit{display:flex;flex-direction:column;align-items:center;flex-shrink:0;gap:8px;}
+.love-clock-days{margin-right:4px;}
+.love-clock-value{display:flex;gap:3px;}
+.love-clock-unit-label{font-size:10px;line-height:1.4;letter-spacing:.12em;text-indent:.12em;color:#a48396;}
+.love-clock-colon{display:grid;place-items:center;align-self:flex-start;width:5px;height:var(--love-digit-h);font-family:Georgia,serif;font-size:22px;line-height:1;color:#a67d93;}
+.love-flip-digit{
+  position:relative;display:block;flex-shrink:0;width:var(--love-digit-w);height:var(--love-digit-h);
+  perspective:420px;isolation:isolate;border-radius:6px;
+  font-family:"Bahnschrift","DIN Alternate","SFMono-Regular",Consolas,monospace;
+  font-size:calc(var(--love-digit-h) * .61);font-weight:400;font-variant-numeric:tabular-nums;
+  color:#f6e7ee;box-shadow:0 3px 10px #0008,0 0 0 1px #e7bbd123;
+}
+.love-clock-days .love-flip-digit{color:#f5d9e6;}
+.love-flip-face{position:absolute;left:0;width:100%;height:50%;display:block;overflow:hidden;backface-visibility:hidden;-webkit-backface-visibility:hidden;}
+.love-flip-top,.love-flip-leaf-top{top:0;border-radius:6px 6px 0 0;background:linear-gradient(#2b1b25,#21151e);}
+.love-flip-bottom,.love-flip-leaf-bottom{bottom:0;border-radius:0 0 6px 6px;background:linear-gradient(#291a24,#34202c);}
+.love-flip-number{position:absolute;top:0;left:0;width:100%;height:var(--love-digit-h);display:flex;align-items:center;justify-content:center;line-height:1;letter-spacing:0;text-indent:0;}
+.love-flip-bottom .love-flip-number,.love-flip-leaf-bottom .love-flip-number{transform:translateY(-50%);}
+.love-flip-leaf-top,.love-flip-leaf-bottom{z-index:3;visibility:hidden;}
+.love-flip-leaf-top{transform-origin:center bottom;}
+.love-flip-leaf-bottom{transform-origin:center top;transform:rotateX(90deg);}
+.love-flip-digit::after{content:"";position:absolute;left:0;right:0;top:50%;height:1px;z-index:4;background:#08050b9c;box-shadow:0 1px 0 #f4c5db08;pointer-events:none;}
+.love-flip-digit.is-flipping .love-flip-leaf-top{visibility:visible;animation:loveFlipTop 620ms ease-in both;}
+.love-flip-digit.is-flipping .love-flip-leaf-bottom{visibility:visible;animation:loveFlipBottom 620ms ease-out both;}
+@keyframes loveFlipTop{0%{transform:rotateX(0deg)}48%,100%{transform:rotateX(-90deg)}}
+@keyframes loveFlipBottom{0%,48%{transform:rotateX(90deg)}100%{transform:rotateX(0deg)}}
+.love-clock-date{font-size:10px;line-height:1.7;letter-spacing:.1em;color:#967284;}
+.love-clock-date time{font-variant-numeric:tabular-nums;color:#b390a3;}
+.love-clock-sr{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
+@media(max-width:600px){
+  .love-clock{--love-digit-w:clamp(20px,6.2vw,27px);--love-digit-h:clamp(36px,10vw,43px);gap:11px;}
+  .love-clock-display{gap:7px;}
+  .love-clock-value{gap:2px;}
+  .love-clock-heading{font-size:10px;letter-spacing:.16em;}
+  .love-clock-unit{gap:7px;}
+  .love-clock-unit-label{font-size:9px;}
+  .love-clock-date{font-size:9px;}
+  .love-clock-colon{width:4px;font-size:19px;}
+}
+@media(max-height:640px){
+  .love-clock{--love-digit-h:36px;--love-digit-w:clamp(19px,6vw,24px);gap:7px;}
+  .love-clock-heading{font-size:10px;}
+  .love-clock-unit{gap:5px;}
+  .love-clock-date,.love-clock-unit-label{font-size:9px;}
+}
+@media(prefers-reduced-motion:reduce){
+  .love-clock{animation:none;}
+  .love-flip-digit.is-flipping .love-flip-leaf-top,.love-flip-digit.is-flipping .love-flip-leaf-bottom{animation:none;visibility:hidden;}
+}

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <title>粒子爱心 · 心动预览</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="css/particle-heart.css?v=3.0">
+  <script defer src="js/particle-heart.js?v=3.0"></script>
+</head>
+<body>
+  <main class="heart-scene" aria-label="震动粒子爱心预览">
+    <canvas id="particleHeart" role="img" aria-label="粉紫色粒子爱心在原地持续震动，每次震动时粒子向外散开，再慢慢回聚。点击或按回车键再次触发心动。" tabindex="0"></canvas>
+    <footer class="heart-tools">
+      <p>轻轻一震 <span>·</span> 心动散作星光</p>
+      <div class="heart-actions">
+        <button id="heartPause" type="button" aria-label="暂停心动" aria-pressed="false" title="暂停心动">
+          <svg class="pause-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6v12M15 6v12"/></svg>
+          <svg class="play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 10 7-10 7Z"/></svg>
+        </button>
+        <button id="heartReset" type="button" aria-label="重新聚成爱心" title="重新聚成爱心"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10a8 8 0 1 1 1.6 7.4M4 4v6h6"/></svg></button>
+      </div>
+    </footer>
+  </main>
+</body>
+</html>
