@@ -9,9 +9,39 @@
 <link rel="stylesheet" href="css/style.css?v=3.0" />
 <link rel="stylesheet" href="css/ring-intro.css?v=3.0" />
 <link rel="stylesheet" href="css/love-clock.css?v=3.0" />
+<link rel="stylesheet" href="css/password-entry.css?v=3.0-entry1" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%E2%99%A5%3C/text%3E%3C/svg%3E" />
 </head>
-<body>
+<body class="password-locked">
+
+  <!-- ===== 故事开始前：只属于我们的暗号 ===== -->
+  <section class="password-entry" id="passwordEntry" aria-labelledby="passwordHeading">
+    <button class="password-fullscreen" id="passwordFullscreen" type="button" title="全屏" aria-label="进入全屏" aria-pressed="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V5a1 1 0 0 1 1-1h4M20 9V5a1 1 0 0 0-1-1h-4M4 15v4a1 1 0 0 0 1 1h4M20 15v4a1 1 0 0 1-1 1h-4"/></svg>
+    </button>
+    <p class="password-fullscreen-status" id="passwordFullscreenStatus" role="status"></p>
+    <div class="password-content">
+      <div class="password-emblem" aria-hidden="true">
+        <svg viewBox="0 0 80 88"><path class="password-lock" d="M25 40V28a15 15 0 0 1 30 0v12M21 40h38a5 5 0 0 1 5 5v27a5 5 0 0 1-5 5H21a5 5 0 0 1-5-5V45a5 5 0 0 1 5-5Z"/><path class="password-lock-heart" d="M40 65s-10-6-10-12a5.5 5.5 0 0 1 10-3 5.5 5.5 0 0 1 10 3c0 6-10 12-10 12Z"/></svg>
+      </div>
+      <p class="password-kicker">ONLY FOR YOU</p>
+      <h1 id="passwordHeading">只属于我们的秘密</h1>
+      <p class="password-note">输入我们的暗号，<br />把心动的故事慢慢打开。</p>
+      <form class="password-form" id="passwordForm" novalidate>
+        <label for="storyPassword">我们的暗号</label>
+        <input id="storyPassword" name="storyPassword" type="password" inputmode="numeric" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="请输入暗号" aria-describedby="passwordError" required />
+        <p class="password-error" id="passwordError" role="status" aria-live="polite"></p>
+        <button class="enter-btn password-submit" id="passwordSubmit" type="submit">
+          <span>开启我们的故事</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6"/></svg>
+        </button>
+      </form>
+      <p class="password-footer">轻触页面，进入全屏体验。<br />有些浪漫，只想让你知道。</p>
+    </div>
+    <noscript><p class="password-noscript">请开启浏览器的 JavaScript，输入暗号后继续。</p></noscript>
+  </section>
+
+  <div id="storyContent" inert aria-hidden="true">
 
   <!-- 背景微光 -->
   <div class="bg-glow" aria-hidden="true"></div>
@@ -110,17 +140,19 @@
   </div>
 
   <audio id="bgm" loop preload="none" hidden></audio>
+  </div>
 
-  <script defer src="js/config.js?v=3.0"></script>
+  <script defer src="js/config.js?v=3.0-entry1"></script>
+  <script defer src="js/password-entry.js?v=3.0-entry1"></script>
   <script defer src="js/atmosphere.js?v=3.0"></script>
   <script defer src="js/music.js?v=3.0"></script>
   <script defer src="js/video-software.js?v=3.0"></script>
   <script defer src="js/video.js?v=3.0"></script>
   <script defer src="js/ring-hands.js?v=3.0"></script>
   <script defer src="js/ring-intro.js?v=3.0"></script>
-  <script defer src="js/particle-heart.js?v=3.0"></script>
+  <script defer src="js/particle-heart.js?v=3.0-entry1"></script>
   <script defer src="js/gallery-assembly.js?v=3.0"></script>
   <script defer src="js/love-clock.js?v=3.0"></script>
-  <script defer src="js/app.js?v=3.0"></script>
+  <script defer src="js/app.js?v=3.0-entry1"></script>
 </body>
 </html>

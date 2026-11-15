@@ -878,9 +878,16 @@
     requestRender();
   }
 
+  function startWhenUnlocked() {
+    if (document.body.classList.contains("password-locked")) {
+      window.addEventListener("story:unlocked", init, { once: true });
+    } else {
+      init();
+    }
+  }
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
+    document.addEventListener("DOMContentLoaded", startWhenUnlocked);
   } else {
-    init();
+    startWhenUnlocked();
   }
 })();

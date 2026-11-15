@@ -160,7 +160,8 @@
     draw();
     if (!paused && !motion.matches) schedule();
   }
-  function schedule() { if (!stopped && !frame && !document.hidden) frame = requestAnimationFrame(tick); }
+  function schedule() { if (!stopped && !frame && !document.hidden && !(embedded && document.body.classList.contains('password-locked'))) frame = requestAnimationFrame(tick); }
+  if (embedded) window.addEventListener('story:unlocked', () => { lastTime = 0; lastPaint = null; resize(); schedule(); }, { once: true });
   function pulse() {
     if (motion.matches) return;
     pulseAt = clock; paused = false; lastTime = 0; lastPaint = null;
