@@ -27,6 +27,7 @@
     var time = document.getElementById("lbSoftwareTime");
     var status = document.getElementById("lbSoftwareStatus");
     var player = null, progressFrame = null, generation = 0, duration = 0, ended = false;
+    var pendingAudioContext = null;
     var lastProgress = 0;
     var targetFps = Math.max(1, Math.min(120, Number(((window.SITE_CONFIG || {}).performance || {}).targetFps) || 120));
     function format(value) {
@@ -64,6 +65,8 @@
       pauseProgress();
       if (player) player.destroy();
       player = null;
+      if (pendingAudioContext) pendingAudioContext.close().catch(function () {});
+      pendingAudioContext = null;
       box.hidden = true;
       button.disabled = true;
       seek.disabled = true;
@@ -72,6 +75,14 @@
     function play(media) {
       stop();
       var session = generation;
+      // Preserve audio permission from the card click while the decoder loads.
+      var AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (AudioContextClass) {
+        try {
+          pendingAudioContext = new AudioContextClass();
+          pendingAudioContext.resume().catch(function () {});
+        } catch (error) {}
+      }
       duration = media.duration || 0;
       ended = false;
       box.hidden = false;
@@ -108,7 +119,7 @@
           if (!player.video.canPlay) throw new Error("Video decode failed");
           button.disabled = false;
           seek.disabled = false;
-          status.textContent = "点播放，看看这段回忆。";
+          startPlayback();
           update();
         }).catch(function (error) {
           if (session !== generation || error.name === "AbortError") return;
@@ -118,6 +129,7 @@
       };
       loadDecoder().then(function (decoder) {
         if (session !== generation) return;
+        if (pendingAudioContext) decoder.AudioOutput.WebAudio.CachedContext = pendingAudioContext;
         player = new decoder.Player(media.software, {
         canvas: canvas, source: Source, autoplay: false, loop: false,
         disableWebAssembly: true, disableGl: true, pauseWhenHidden: false,
@@ -135,19 +147,15 @@
           update();
         }
         });
+        pendingAudioContext = null; // The player now owns and releases this context.
       }).catch(function () {
         if (session !== generation) return;
         status.textContent = "这段回忆还没加载成功，请关闭后重试。";
         onNotice("视频加载失败，请检查网络后再试");
       });
     }
-    button.addEventListener("click", function () {
-      if (!player || button.disabled) return;
-      if (!player.paused) {
-        player.pause();
-        button.textContent = "播放";
-        return;
-      }
+    function startPlayback() {
+      if (!player) return;
       if (ended) { player.seek(0); ended = false; }
       if (player.audioOut) {
         var audioContext = player.audioOut.context;
@@ -158,6 +166,14 @@
       requestProgress();
       button.textContent = "暂停";
       status.textContent = "";
+    }
+    button.addEventListener("click", function () {
+      if (!player || button.disabled) return;
+      if (!player.paused) {
+        player.pause();
+        return;
+      }
+      startPlayback();
     });
     seek.addEventListener("input", function () {
       if (!player || seek.disabled) return;

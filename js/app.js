@@ -87,6 +87,8 @@
   var MIN_TILT = -72, MAX_TILT = 72;
   var MIN_ZOOM = 0.40, MAX_ZOOM = 1.35;
   var roseCanvasScale = 0;
+  var roseRasterZoom = 1;
+  var roseSamplingScale = 0.78;
   // 以屏幕比例存储平移，缩放和窗口变化都不会改变拖动距离。
   var panX = 0, panY = 0;
   var PAN_LIMIT = 0.45;
@@ -95,6 +97,7 @@
   var gesture = null;
   var lastFrame = 0;
   var lastRender = 0;
+  var nextRenderAt = 0;
   var rotation = 0;        // 拖动带来的整体转角
   var autoRotation = 0;    // 各排自动旋转的独立相位
   var rowLayers = [];
@@ -102,6 +105,7 @@
   var autoRotate = OPT.autoRotate;
   var dragging = false;
   var dragMoved = false;
+  var cardPress = null;
   var lastX = 0, lastY = 0, lastT = 0;
   var lbIndex = 0;
   var entered = false;
@@ -204,15 +208,25 @@
     updateRoseCanvas(true);
   }
 
-  // 仅在缩放跨过档位时扩展画布，保持拉远后的粒子空间及清晰度。
+  // 滚轮只改变镜头和绘制精度，保持 iframe 视口固定，避免异步重排造成错位。
   function updateRoseCanvas(force) {
-    var coverage = zoom < 0.45 ? 0.40 : zoom < 0.60 ? 0.45 : zoom < 0.78 ? 0.60 : 0.78;
-    if (!force && coverage === roseCanvasScale) return;
-    roseCanvasScale = coverage;
-    var root = document.documentElement.style;
-    root.setProperty("--rose-canvas-w", (window.innerWidth * cameraDistance / P / coverage).toFixed(2) + "px");
-    root.setProperty("--rose-canvas-h", (window.innerHeight * cameraDistance / P / coverage).toFixed(2) + "px");
-    roseLayout.pixelRatio = (P / cameraDistance) * Math.min(window.devicePixelRatio || 1, MOBILE ? 1 : 1.5) * coverage / 0.78;
+    var coverage = 0.78;
+    var sampling = zoom < 0.45 ? 0.40 : zoom < 0.60 ? 0.45 : zoom < 0.78 ? 0.60 : 0.78;
+    var magnification = Math.max(1, zoom);
+    var rasterZoom = Math.min(MAX_ZOOM, Math.ceil(magnification * 10) / 10);
+    if (!force && coverage === roseCanvasScale && rasterZoom === roseRasterZoom &&
+        sampling === roseSamplingScale &&
+        Math.abs(magnification - (roseLayout.magnification || 1)) < 0.015) return;
+    if (force || roseCanvasScale !== coverage) {
+      var root = document.documentElement.style;
+      root.setProperty("--rose-canvas-w", (window.innerWidth * cameraDistance / P / coverage).toFixed(2) + "px");
+      root.setProperty("--rose-canvas-h", (window.innerHeight * cameraDistance / P / coverage).toFixed(2) + "px");
+      roseCanvasScale = coverage;
+    }
+    roseRasterZoom = rasterZoom;
+    roseSamplingScale = sampling;
+    roseLayout.pixelRatio = (P / cameraDistance) * Math.min(window.devicePixelRatio || 1, MOBILE ? 1 : 1.5) * sampling / 0.78 * rasterZoom;
+    roseLayout.magnification = magnification;
     syncCenterRoseLayout();
   }
 
@@ -338,7 +352,10 @@
   function tick(time) {
     frameId = null;
     if (document.hidden) return;
-    if (lastRender && time - lastRender < 1000 / TARGET_FPS - 0.5) { requestRender(); return; }
+    var interval = 1000 / TARGET_FPS;
+    if (!lastRender) nextRenderAt = 0;
+    if (nextRenderAt && time + 0.5 < nextRenderAt) { requestRender(); return; }
+    nextRenderAt = !nextRenderAt || time - nextRenderAt > interval * 2 ? time + interval : nextRenderAt + interval;
     lastRender = time;
     var delta = lastFrame ? clamp((time - lastFrame) / (1000 / 60), 0, 3) : 1;
     lastFrame = time;
@@ -417,7 +434,11 @@
     if (!pointers.size) {
       dragMoved = false;
       targetZoom = zoom;
-    } else dragMoved = true; // 双指手势不能触发照片点击。
+      cardPress = { card: pickCard(e.clientX, e.clientY) };
+    } else {
+      dragMoved = true; // 双指手势不能触发照片点击。
+      cardPress = null;
+    }
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, pan: !!e.shiftKey });
     stageWrap.setPointerCapture(e.pointerId);
     dragging = true;
@@ -464,6 +485,10 @@
 
   function onUp(e) {
     if (!pointers.has(e.pointerId)) return;
+    if (e.type === "pointercancel" || e.type === "lostpointercapture") {
+      cardPress = null;
+      dragMoved = true;
+    }
     pointers.delete(e.pointerId);
     if (stageWrap.hasPointerCapture(e.pointerId)) stageWrap.releasePointerCapture(e.pointerId);
     if (pointers.size) {
@@ -480,6 +505,7 @@
   }
 
   function cancelDrag() {
+    cardPress = null;
     var ids = Array.from(pointers.keys());
     pointers.clear();
     ids.forEach(function (id) {
@@ -585,14 +611,50 @@
   }
 
   function pickCard(x, y) {
-    var stack = document.elementsFromPoint ? document.elementsFromPoint(x, y) : [];
-    for (var i = 0; i < stack.length; i++) {
-      var el = stack[i];
-      if (el.classList && el.classList.contains("card")) {
-        return el;
-      }
+    // CSS 3D hit-test order can disagree with the visible depth of nested rows.
+    // Cast a ray through each card's actual, currently animated plane instead.
+    var Matrix = window.DOMMatrix || window.WebKitCSSMatrix;
+    if (!Matrix) return null;
+    function matrixFor(style) {
+      return style.transform === "none" ? new Matrix() : new Matrix(style.transform);
     }
-    return null;
+    var stageStyle = getComputedStyle(stageWrap);
+    var origin = stageStyle.perspectiveOrigin.split(/\s+/);
+    var bounds = stageWrap.getBoundingClientRect();
+    var originX = parseFloat(origin[0]), originY = parseFloat(origin[1]);
+    var perspective = parseFloat(stageStyle.perspective);
+    var cameraStyle = getComputedStyle(cylinder);
+    var camera = new Matrix().translate(parseFloat(cameraStyle.left) - originX,
+      parseFloat(cameraStyle.top) - originY, 0).multiply(matrixFor(cameraStyle))
+      .multiply(matrixFor(getComputedStyle(world)));
+    var rayX = x - bounds.left - originX;
+    var rayY = y - bounds.top - originY;
+    var rows = rowLayers.map(function (row) {
+      return camera.multiply(matrixFor(getComputedStyle(row)));
+    });
+    var nearest = null, nearestDistance = Infinity;
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      var style = getComputedStyle(item.el);
+      var inverse = rows[item.row].multiply(matrixFor(style)).inverse();
+      // Transform the eye and ray direction into the card's centred coordinates.
+      var eyeX = inverse.m31 * perspective + inverse.m41;
+      var eyeY = inverse.m32 * perspective + inverse.m42;
+      var eyeZ = inverse.m33 * perspective + inverse.m43;
+      var dx = inverse.m11 * rayX + inverse.m21 * rayY - inverse.m31 * perspective;
+      var dy = inverse.m12 * rayX + inverse.m22 * rayY - inverse.m32 * perspective;
+      var dz = inverse.m13 * rayX + inverse.m23 * rayY - inverse.m33 * perspective;
+      if (Math.abs(dz) < 0.000001) continue;
+      var distance = -eyeZ / dz;
+      if (distance <= 0 || distance >= nearestDistance) continue;
+      var localX = eyeX + distance * dx;
+      var localY = eyeY + distance * dy;
+      if (Math.abs(localX) > parseFloat(style.width) / 2 ||
+          Math.abs(localY) > parseFloat(style.height) / 2) continue;
+      nearest = item.el;
+      nearestDistance = distance;
+    }
+    return nearest;
   }
   function indexOfCard(el) {
     for (var i = 0; i < items.length; i++) if (items[i].el === el) return i;
@@ -639,11 +701,14 @@
     });
 
     stageWrap.addEventListener("click", function (e) {
+      var press = cardPress;
+      cardPress = null;
       var wasDrag = e.detail !== 0 && dragMoved;
       dragMoved = false;
       if (wasDrag) return;
       if (e.target.closest && e.target.closest(".controls,.lightbox,.topbar,.hint,.enter")) return;
-      var card = e.detail === 0 && e.target.closest ? e.target.closest(".card") : pickCard(e.clientX, e.clientY);
+      var card = e.detail === 0 && e.target.closest ? e.target.closest(".card") :
+        press ? press.card : pickCard(e.clientX, e.clientY);
       if (!card) return;
       var idx = indexOfCard(card);
       if (idx >= 0) openLightbox(idx);
@@ -733,7 +798,7 @@
       window.addEventListener("message", function (event) {
         if (event.source === roseFrame.contentWindow && event.data === "story:rose:ready") startCenterRose();
       });
-      roseFrame.src = "rose.html?embed=1&fps=" + TARGET_FPS + (MOBILE ? "&lite=1" : "") + "&v=3.0";
+      roseFrame.src = "rose.html?embed=1&fps=" + TARGET_FPS + (MOBILE ? "&lite=1" : "") + "&v=3.0-rose7";
     }
     document.getElementById("introKicker").textContent = INTRO.kicker || "给我们的两周年";
     document.getElementById("introHeading").textContent = INTRO.heading || "两年啦，还是好喜欢你。";
@@ -743,6 +808,7 @@
     var skip = qs.indexOf("enter=1") >= 0 || qs.indexOf("skipintro=1") >= 0;
 
     if (INTRO.show === false || skip) {
+      document.body.classList.remove("gallery-pending");
       if (window.stopIntroHeart) window.stopIntroHeart();
       if (window.stopLoveClock) window.stopLoveClock();
       enterEl.style.display = "none";
@@ -781,6 +847,8 @@
         if (OPT.hintAutoHide > 0) setTimeout(hideHint, OPT.hintAutoHide);
       }
       function reveal(state) {
+        // Reveal only when the ceremony hands off to the gallery.
+        document.body.classList.remove("gallery-pending");
         if ((state && state.skip) || OPT.reducedMotion || document.hidden || !window.assembleGallery) {
           wallReady = true;
           openCompletedGallery();

@@ -177,6 +177,10 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .card:hover .cap,.card:focus-visible .cap{opacity:1}
 .card:hover .photo{filter:brightness(1.12) saturate(1.05)}
 
+/* Keep the gallery hidden through password unlock and the opening cover. */
+.gallery-pending .stage-wrap,.gallery-pending .controls,
+.gallery-pending .hint,.gallery-pending .topbar{visibility:hidden}
+
 /* Hold the 3D cards still while their own colours gather into the pictures. */
 .gallery-forming .card-face{opacity:0}
 .gallery-forming .center-rose{visibility:hidden}

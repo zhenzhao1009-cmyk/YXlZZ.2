@@ -101,7 +101,7 @@
 <a class="back" id="back" href="index.html">← 照片墙</a>
 
 <div class="copy">
-  <p class="c1">这一束，是用一万颗光替你留住的春天</p>
+  <p class="c1">这一束，是用万千颗光替你留住的春天</p>
   <p class="c2">花会谢，代码不会 —— 就像我对你，永不结束的循环</p>
   <p class="c3">拖动旋转 · 点击绽放 · 滚轮缩放</p>
 </div>
@@ -133,13 +133,12 @@
   if (EMBED) document.documentElement.classList.add('embedded');
   var FREEZE = (Q.t !== undefined && isFinite(parseFloat(Q.t))) ? parseFloat(Q.t) : null;
 
-  var reduce = false;
-  try { reduce = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+  var motionPreference = null, reduce = false;
+  try { motionPreference = matchMedia('(prefers-reduced-motion: reduce)'); reduce = motionPreference.matches; } catch (e) {}
 
   var CFG = {
-    density:   reduce ? 0.45 : (LITE ? 0.32 : 1.0),
-    petalBase: 430,
-    bloom:     !reduce && !LITE,
+    density:   reduce ? 0.85 : (LITE ? 0.82 : 2.15),
+    bloom:     !reduce && !LITE && !EMBED,
     fit:       0.40,
     cy:        0.44
   };
@@ -156,6 +155,9 @@
   function jit(a) { return (rnd() * 2 - 1) * a; }
   function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
   var targetFps = clamp(parseFloat(Q.fps) || 120, 1, 120);
+  function getMagnification() {
+    return EMBED && embeddedLayout ? clamp(embeddedLayout.magnification || 1, 1, 1.5) : 1;
+  }
   function smoothstep(e0, e1, x) {
     var t = clamp((x - e0) / (e1 - e0 || 1e-6), 0, 1);
     // 起止速度、加速度均为零，避免聚拢与绽放衔接时突兀。
@@ -164,29 +166,31 @@
 
   /* ===================== 调色 ===================== */
   var STYLES = [
-    { c: [104, 11, 38], w: 1.45 },  // 0 花瓣暗部
-    { c: [142, 17, 48], w: 1.55 },  // 1 花瓣主体
-    { c: [ 64,  8, 28], w: 1.35 },  // 2 花瓣最深
-    { c: [255,162,192], w: 2.05 },  // 3 花瓣边缘
-    { c: [255,228,240], w: 1.60 },  // 4 花瓣高光
-    { c: [222,132, 82], w: 1.55 },  // 5 花心暖光
-    { c: [246,206,164], w: 1.80 },  // 6 花心亮芯
-    { c: [ 26,130, 86], w: 1.45 },  // 7 枝叶
-    { c: [ 92,192,130], w: 1.70 }   // 8 枝叶高光
+    { c: [179, 22, 61], w: 1.30 },  // 0 深红瓣面
+    { c: [240, 42, 98], w: 1.56 },
+    { c: [ 98, 11, 36], w: 1.18 },  // 2 层间暗部
+    { c: [255,133,174], w: 1.38 },  // 3 柔粉瓣缘
+    { c: [255,217,230], w: 1.30 },
+    { c: [190, 32, 71], w: 1.26 },  // 5 花心保持深红
+    { c: [247,126,158], w: 1.32 },
+    { c: [ 36,117, 76], w: 1.06 },
+    { c: [102,181,115], w: 1.24 },
+    { c: [218,177,103], w: 1.14 }   // 9 叶脉与花枝的暖金细光
   ];
-  // 透明嵌入时保留更饱和的红色主体，避免被亮色照片冲淡。
   if (EMBED) {
-    STYLES[0].c = [132, 9, 43];
-    STYLES[1].c = [205, 17, 67];
-    STYLES[2].c = [88, 6, 31];
-    STYLES[3].c = [255, 130, 176];
-    STYLES[7].c = [34, 150, 91];
-    STYLES[8].c = [100, 205, 138];
+    STYLES[0].c = [211, 36, 82];
+    STYLES[1].c = [255, 72, 123];
+    STYLES[2].c = [135, 18, 51];
+    STYLES[3].c = [255, 159, 195];
+    STYLES[5].c = [215, 43, 87];
+    STYLES[7].c = [62, 166, 103];
+    STYLES[8].c = [142, 216, 144];
+    STYLES[9].c = [243, 204, 128];
   }
   var NS = STYLES.length;
   var NBAND = 3;
   var NB = NS * NBAND;
-  var BAND_MUL = EMBED ? [0.52, 0.78, 1.0] : [0.44, 0.70, 1.0];
+  var BAND_MUL = EMBED ? [0.65, 0.90, 1.0] : [0.50, 0.80, 1.0];
 
   var STYLE_STR = [], STYLE_W = [];
   (function () {
@@ -244,22 +248,30 @@
 
   /* ===================== 数据 ===================== */
   var N = 0, R3 = 1;
+  var baseCount = 0, detailCount = 0, activeCount = 0;
   var BB_HX = 1, BB_HY = 1, BB_HZ = 1;
   var BB_CROWN_HX = 1, BB_CROWN_HY = 1, BB_CROWN_HZ = 1, BB_CROWN_CY = 0;
   var BB_CROWN_CX = 0, BB_CROWN_CZ = 0;
   var tx, ty, tz, bx, by, bz, sox, soy, soz, spreadX, spreadY;
+  var waveSin, waveCos, swayWeight;
+  var screenX, screenY, screenZ, screenCell, screenVisible;
+  var depthGrid = null, gridCols = 0, gridRows = 0, gridCell = 3;
+  var glintX = new Float32Array(128), glintY = new Float32Array(128), glintN = 0;
   var sidx, dly, dur, oaT, obT;
   var assembledAt = 0, bloomedAt = 0;
 
   function build() {
     var A = {
       x: [], y: [], z: [], cx: [], cy: [], cz: [],
-      si: [], dl: [], du: [], oa: [], ob: []
+      si: [], dl: [], du: [], oa: [], ob: [], phase: [], pt: [], px: []
     };
-    function add(o, c, si, d, du, oa, ob) {
+    function add(o, c, si, d, du, oa, ob, phase, sampleT, sampleX) {
       A.x.push(o[0]); A.y.push(o[1]); A.z.push(o[2]);
       A.cx.push(c[0]); A.cy.push(c[1]); A.cz.push(c[2]);
       A.si.push(si); A.dl.push(d); A.du.push(du); A.oa.push(oa); A.ob.push(ob);
+      A.phase.push(phase || 0);
+      A.pt.push(sampleT === undefined ? -1 : sampleT);
+      A.px.push(sampleX || 0);
     }
 
     /* ---------- 花冠：逐花瓣采样 ----------
@@ -291,12 +303,12 @@
         var x, tt, edge = false;
         var roll = rnd();
 
-        if (roll < 0.12) {
+        if (roll < 0.11) {
           // 瓣缘：勾出每片花瓣的轮廓
           x = rnd() < 0.62 ? rr(0.94, 1.0) : rr(0.0, 0.04);
           tt = tA + PETAL_T * rr(0.02, 0.98);
           edge = true;
-        } else if (roll < 0.20) {
+        } else if (roll < 0.18) {
           // 瓣根：让层与层的分界更清楚
           x = rr(0.0, 0.10);
           tt = tA + PETAL_T * rr(0.02, 0.98);
@@ -317,21 +329,22 @@
         if (tmpP[2] > crownMaxZ) crownMaxZ = tmpP[2];
 
         var si;
-        if (edge) si = rnd() < 0.40 ? 4 : 3;
+        if (edge) si = rnd() < 0.08 ? 4 : 3;
         else if (heat < 0.10) si = rnd() < 0.34 ? 6 : 5;
         else {
           // 靠近瓣缘偏亮，瓣根偏暗
-          if (x > 0.62) si = rnd() < 0.24 ? 3 : 1;
+          if (x > 0.62) si = rnd() < 0.10 ? 3 : 1;
           else { var q = rnd(); si = q < 0.46 ? 1 : (q < 0.76 ? 2 : 0); }
         }
 
         add([tmpP[0], tmpP[1], tmpP[2]], [tmpB[0], tmpB[1], tmpB[2]], si,
-            0.10 + 0.85 * rnd(), 1.15 + 0.70 * rnd(), oa0, ob0);
+            0.10 + 0.85 * rnd(), 1.15 + 0.70 * rnd(), oa0, ob0,
+            tt * 0.55 + x * 5.0, tt, x);
       }
     }
 
     /* ---------- 花心 ---------- */
-    var coreN = Math.round(320 * CFG.density);
+    var coreN = Math.round(180 * CFG.density);
     for (var c1 = 0; c1 < coreN; c1++) {
       var uu = Math.pow(rnd(), 0.8);
       var aa = rnd() * TAU * (1 + 2.6 * uu);
@@ -364,31 +377,31 @@
     /* ---------- 花枝（S 形） ---------- */
     // 花冠底部约在 y = -0.11，花枝从这里往下延伸
     var stemTop = -0.04;
-    var stemBot = -1.75;
+    var stemBot = -2.10;
     var stemN = Math.round(1000 * CFG.density);
     for (var k3 = 0; k3 < stemN; k3++) {
       var yy = rr(stemBot, stemTop);
       var u3 = (yy - stemBot) / (stemTop - stemBot);   // 0 底 -> 1 顶
       var bendX = 0.052 * Math.sin((1 - u3) * 2.2);
-      var bendZ = 0.034 * Math.cos((1 - u3) * 1.8);
+      var bendZ = 0.034 * Math.cos((1 - u3) * 1.8) + Math.max(0, -yy - 0.75) * 0.48;
       var rad2 = 0.013 * Math.sqrt(rnd());
       var th2 = rnd() * TAU;
       var p3 = [bendX + Math.cos(th2) * rad2, yy, bendZ + Math.sin(th2) * rad2];
-      add(p3, p3, rnd() < 0.18 ? 8 : 7, 0.22, 1.5, 0, 0);
+      add(p3, p3, rnd() < 0.13 ? 9 : (rnd() < 0.22 ? 8 : 7), 0.22, 1.5, 0, 0);
     }
 
     /* ---------- 叶片 ---------- */
     var LEAVES = [
-      { y: -0.55, ang: 0.55, len: 0.46, halfW: 0.095 },
-      { y: -0.95, ang: 0.55 + Math.PI, len: 0.40, halfW: 0.083 },
-      { y: -1.30, ang: 0.55 + 2.4, len: 0.33, halfW: 0.072 }
+      { y: -0.70, ang: 0.55, len: 0.46, halfW: 0.095 },
+      { y: -1.20, ang: 0.55 + Math.PI, len: 0.40, halfW: 0.083 },
+      { y: -1.65, ang: 0.55 + 2.4, len: 0.33, halfW: 0.072 }
     ];
     for (var li = 0; li < LEAVES.length; li++) {
       var lv = LEAVES[li];
       var lcnt = Math.round(380 * CFG.density);
-      var u3b = (lv.y - (-1.75)) / ((-0.04) - (-1.75));
+      var u3b = (lv.y - stemBot) / (stemTop - stemBot);
       var bx0 = 0.052 * Math.sin((1 - u3b) * 2.2);
-      var bz0 = 0.034 * Math.cos((1 - u3b) * 1.8);
+      var bz0 = 0.034 * Math.cos((1 - u3b) * 1.8) + Math.max(0, -lv.y - 0.75) * 0.48;
       var caL = Math.cos(lv.ang), saL = Math.sin(lv.ang);
 
       for (var k5 = 0; k5 < lcnt; k5++) {
@@ -403,14 +416,29 @@
           lv.y + yy5,
           bz0 + rr5 * saL + ww5 * caL
         ];
-        add(p5, p5, rnd() < 0.24 ? 8 : 7, 0.22, 1.5, 0, 0);
+        add(p5, p5, Math.abs(w5) < 0.07 ? 9 : (rnd() < 0.24 ? 8 : 7), 0.22, 1.5, 0, 0);
       }
     }
+
+    // 补点仍采样同一片真实曲面；小尺寸只绘制原有点，放大时逐步显现。
+    baseCount = A.x.length;
+    detailCount = Math.round(baseCount * (LITE ? 0.60 : 0.78));
+    for (var extra = 0; extra < detailCount; extra++) {
+      var source = Math.floor(rnd() * baseCount);
+      while (A.pt[source] < 0) source = Math.floor(rnd() * baseCount);
+      var startT = Math.floor(A.pt[source] / PETAL_T) * PETAL_T;
+      var detailT = clamp(A.pt[source] + jit(PETAL_T * 0.03), startT + PETAL_T * 0.01, startT + PETAL_T * 0.99);
+      var detailX = clamp(A.px[source] + jit(0.025), 0.008, 1);
+      roseSurface(detailT, detailX, tmpP); budSurface(detailT, detailX, tmpB);
+      add(tmpP, tmpB, A.si[source], A.dl[source], A.du[source], A.oa[source], A.ob[source],
+          detailT * 0.55 + detailX * 5.0, detailT, detailX);
+    }
+    activeCount = baseCount;
 
     /* ---------- 定型 ---------- */
     N = A.x.length;
     var mnx = 1e9, mxx = -1e9, mny = 1e9, mxy = -1e9, mnz = 1e9, mxz = -1e9;
-    for (var i = 0; i < N; i++) {
+    for (var i = 0; i < baseCount; i++) {
       if (A.x[i] < mnx) mnx = A.x[i]; if (A.x[i] > mxx) mxx = A.x[i];
       if (A.y[i] < mny) mny = A.y[i]; if (A.y[i] > mxy) mxy = A.y[i];
       if (A.z[i] < mnz) mnz = A.z[i]; if (A.z[i] > mxz) mxz = A.z[i];
@@ -432,6 +460,9 @@
     BB_CROWN_CZ = (crownMaxZ + crownMinZ) / 2 - oz0;
 
     tx = new Float32Array(N); ty = new Float32Array(N); tz = new Float32Array(N);
+    waveSin = new Float32Array(N); waveCos = new Float32Array(N); swayWeight = new Float32Array(N);
+    screenX = new Float32Array(N); screenY = new Float32Array(N); screenZ = new Float32Array(N);
+    screenCell = new Int32Array(N); screenVisible = new Uint8Array(N);
     bx = new Float32Array(N); by = new Float32Array(N); bz = new Float32Array(N);
     sox = new Float32Array(N); soy = new Float32Array(N); soz = new Float32Array(N);
     if (EMBED) { spreadX = new Float32Array(N); spreadY = new Float32Array(N); }
@@ -445,6 +476,8 @@
       tx[j] = X; ty[j] = Y; tz[j] = Z;
       bx[j] = A.cx[j] - ox0; by[j] = A.cy[j] - oy0; bz[j] = A.cz[j] - oz0;
       sidx[j] = A.si[j];
+      waveSin[j] = Math.sin(A.phase[j]); waveCos[j] = Math.cos(A.phase[j]);
+      swayWeight[j] = clamp((Y + BB_HY) / Math.max(BB_CROWN_CY + BB_HY, 0.01), 0, 1);
       // 紧凑的聚拢与绽放交叠，在约一秒内成形。
       dly[j] = A.dl[j] * 0.18;
       dur[j] = A.du[j] / 2.20;
@@ -470,6 +503,17 @@
   var ctx = cvs.getContext('2d', { alpha: EMBED });
   var off = document.createElement('canvas');
   var offc = off.getContext('2d');
+  // 微光只画少量缓存光点，嵌入照片墙时无需逐帧模糊整张画布。
+  var glint = document.createElement('canvas');
+  glint.width = glint.height = 32;
+  var glintContext = glint.getContext('2d');
+  var glintGradient = glintContext.createRadialGradient(16, 16, 0, 16, 16, 16);
+  glintGradient.addColorStop(0, 'rgba(255,229,238,0.95)');
+  glintGradient.addColorStop(0.16, 'rgba(255,146,187,0.65)');
+  glintGradient.addColorStop(0.45, 'rgba(240,71,132,0.14)');
+  glintGradient.addColorStop(1, 'rgba(240,71,132,0)');
+  glintContext.fillStyle = glintGradient;
+  glintContext.fillRect(0, 0, 32, 32);
 
   var DPR = 1, W = 0, H = 0, cx = 0, cy = 0, BASE = 1, zoom = 1;
   var roseWidth = 0, roseHeight = 0;
@@ -486,18 +530,22 @@
     bufN = new Int32Array(NB);
   }
 
-  function resize() {
+  function resize(repaint) {
     DPR = Math.min(window.devicePixelRatio || 1, EMBED ? 1.5 : 2);
     W = window.innerWidth; H = window.innerHeight;
     if (EMBED && embeddedLayout) DPR = embeddedLayout.pixelRatio;
     if (EMBED) {
-      // 大屏控制像素总量，低帧率时降分辨率而不减少花瓣粒子。
-      DPR = Math.min(DPR * rasterScale, Math.sqrt((LITE ? 700000 : 2800000) / Math.max(1, W * H)));
+      // 控制像素总量，手机按帧预算联动调整精度与粒子采样。
+      var magnification = getMagnification();
+      var pixelBudget = Math.min((LITE ? 700000 : 2800000) * magnification * magnification, LITE ? 1400000 : 5200000);
+      DPR = Math.min(DPR * rasterScale, Math.sqrt(pixelBudget / Math.max(1, W * H)));
     }
     roseWidth = EMBED && embeddedLayout ? embeddedLayout.width : W;
     roseHeight = EMBED && embeddedLayout ? embeddedLayout.height : H;
-    cvs.width = Math.max(1, Math.round(W * DPR));
-    cvs.height = Math.max(1, Math.round(H * DPR));
+    var bitmapWidth = Math.max(1, Math.round(W * DPR));
+    var bitmapHeight = Math.max(1, Math.round(H * DPR));
+    if (cvs.width !== bitmapWidth) cvs.width = bitmapWidth;
+    if (cvs.height !== bitmapHeight) cvs.height = bitmapHeight;
     cvs.style.width = W + 'px';
     cvs.style.height = H + 'px';
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
@@ -535,12 +583,16 @@
       // 花冠中心在画布上方 40% 处，花枝自然垂向文案上方
       cy = H * (topPad + (1 - topPad - botPad) * 0.40);
     }
-    BASE = Math.min(kx, ky);
+    BASE = Math.min(kx, ky) * 1.08;
     if (EMBED) {
       BASE = Math.min(roseWidth * 0.78 / (crownSpanX * 1.35), roseHeight * 0.72 / (fullSpanY * 1.25));
       // 成形后的大小和位置独立于全屏扩散画布。
       cy = embeddedLayout ? H * embeddedLayout.center - roseHeight * 0.08 : H * 0.30;
     }
+
+    gridCell = clamp(BASE * 0.012, 2, 4) / Math.sqrt(getMagnification());
+    gridCols = Math.ceil(W / gridCell) + 1; gridRows = Math.ceil(H / gridCell) + 1;
+    depthGrid = new Float32Array(gridCols * gridRows);
 
     if (EMBED) {
       var lightRadius = Math.min(roseWidth, roseHeight);
@@ -564,6 +616,9 @@
     bgGrad.addColorStop(0, '#1e0c17');
     bgGrad.addColorStop(0.38, '#100713');
     bgGrad.addColorStop(1, '#05030a');
+
+    // Canvas 改尺寸会立即清空；在同一次事件处理里补回当前画面。
+    if (repaint !== false && started) paintRose(0);
   }
 
   /* ===================== 交互 ===================== */
@@ -584,6 +639,7 @@
     moved += Math.abs(dx) + Math.abs(dy);
     yawDrag += dx * 0.0062;
     pitchDrag = clamp(pitchDrag + dy * 0.0040, -0.40, 0.50);
+    scheduleFrame();
   });
 
   function endDrag(e) {
@@ -591,10 +647,11 @@
     dragging = false;
     cvs.classList.remove('grabbing');
     if (moved < 8) {
-      pulse = 1;
-      RIPPLES.push({ x: e.clientX, y: e.clientY, age: 0, life: 1.35 });
+      pulse = reduce ? 0 : 1;
+      if (!reduce) RIPPLES.push({ x: e.clientX, y: e.clientY, age: 0, life: 1.35 });
     }
     try { cvs.releasePointerCapture(e.pointerId); } catch (err) {}
+    scheduleFrame();
   }
   cvs.addEventListener('pointerup', endDrag);
   cvs.addEventListener('pointercancel', function () {
@@ -604,9 +661,10 @@
   cvs.addEventListener('wheel', function (e) {
     e.preventDefault();
     zoom = clamp(zoom * (1 - e.deltaY * 0.0012), 0.62, 1.75);
+    scheduleFrame();
   }, { passive: false });
 
-  window.addEventListener('resize', resize);
+  window.addEventListener('resize', function () { resize(); if (started) scheduleFrame(); });
 
   (function () {
     if (EMBED) return;
@@ -686,9 +744,35 @@
   }
 
   /* ===================== 主循环 ===================== */
-  var t0 = 0, T = 0, prev = 0;
+  var t0 = 0, T = 0, prev = 0, elapsedClock = 0;
   var frameId = null, embeddedPaused = false, lastPaint = 0;
+  var nextPaintAt = 0;
   var slow = 0, quality = 2, rasterScale = 1;
+  var mobileDrawMs = 0, mobileSamples = 0, mobilePressure = 0, mobileRecovery = 0, mobileCooldown = 0;
+  var mobileFastCadence = false, mobileLateRatio = 0;
+  var nextMobileQuality = 2;
+
+  function sampleMobileDraw(cost, frameMs) {
+    mobileDrawMs = mobileSamples ? mobileDrawMs * 0.90 + cost * 0.10 : cost;
+    var interval = 1000 / targetFps;
+    if (frameMs > 0 && frameMs < interval * 1.4) mobileFastCadence = true;
+    var late = mobileFastCadence && frameMs > interval * 1.85;
+    mobileLateRatio = mobileLateRatio * 0.92 + (late ? 0.08 : 0);
+    mobileSamples++;
+    if (mobileSamples < 24) return;
+    if (mobileCooldown > 0) { mobileCooldown--; return; }
+    // 给镜头、照片和花瓣雨留出时间，玫瑰只使用约七成帧预算。
+    var budget = 1000 / targetFps * 0.70;
+    mobilePressure = mobileDrawMs > budget || mobileLateRatio > 0.25 ? mobilePressure + 1 : Math.max(0, mobilePressure - 1);
+    mobileRecovery = mobileDrawMs < budget * 0.55 && mobileLateRatio < 0.05 ? mobileRecovery + 1 : 0;
+    if (mobilePressure >= 18 && quality > 0) {
+      nextMobileQuality = quality - 1;
+      mobilePressure = mobileRecovery = 0; mobileCooldown = 60;
+    } else if (mobileRecovery >= 180 && quality < 2) {
+      nextMobileQuality = quality + 1;
+      mobilePressure = mobileRecovery = 0; mobileCooldown = 120;
+    }
+  }
 
   function scheduleFrame() {
     if (started && !document.hidden && !embeddedPaused && frameId === null) {
@@ -702,45 +786,12 @@
   if (DBG) dbgEl.style.display = 'block';
   var fpsAcc = 0, fpsN = 0, fpsShow = 0, dbgTick = 0;
 
-  function frame(now) {
-    frameId = null;
-    if (document.hidden || embeddedPaused) return;
-    if (lastPaint && now - lastPaint < 1000 / targetFps - 0.5) {
-      scheduleFrame();
-      return;
-    }
-    lastPaint = now;
-    if (!t0) { t0 = now; prev = now; }
-    if (!prev) prev = now;
-    var dt = (now - prev) / 1000;
-    prev = now;
-    if (dt > 0.2) dt = 0.2;
-
-    T = FREEZE !== null ? FREEZE : (EMBED && reduce ? 10 : (now - t0) / 1000);
-
-    if (DBG) {
-      if (dt > 0) { fpsAcc += 1 / dt; fpsN++; }
-      if (++dbgTick % 12 === 0 && fpsN) {
-        fpsShow = fpsAcc / fpsN; fpsAcc = 0; fpsN = 0;
-        dbgEl.textContent =
-          'fps      ' + fpsShow.toFixed(1) + '\n' +
-          'particles ' + N + '\n' +
-          'quality  ' + quality + '\n' +
-          'dpr      ' + DPR.toFixed(2) + '\n' +
-          't        ' + T.toFixed(1) + 's';
-      }
-    }
-
-    if (FREEZE === null) {
-      if (dt > (LITE ? 0.050 : 0.027)) slow++; else slow = Math.max(0, slow - 0.5);
-      var slowLimit = EMBED ? 12 : 90;
-      if (slow > slowLimit && quality === 2) { quality = 1; slow = 0; }
-      else if (slow > slowLimit && quality === 1) {
-        quality = 0; rasterScale = 0.8; resize(); slow = 0;
-      }
-    }
-
-    if (pulse > 0) pulse = Math.max(0, pulse - dt * 2.0);
+  // 分辨率切换时复用当前时间重画，不推进动画，也不创建第二条 RAF 循环。
+  function paintRose(dt) {
+    var motionT = reduce ? 0 : T;
+    var magnification = getMagnification();
+    var detailScale = LITE ? (quality === 2 ? 1 : quality === 1 ? 0.90 : 0.75) : 1;
+    activeCount = baseCount + Math.round(detailCount * smoothstep(1, 1.35, magnification) * detailScale);
 
     /* 背景 */
     ctx.globalCompositeOperation = 'source-over';
@@ -756,7 +807,7 @@
     }
 
     /* 嵌入光晕复用缓存，呼吸只改变透明度。 */
-    var gp = 0.5 + 0.5 * Math.sin(T * 0.85);
+    var gp = 0.5 + 0.5 * Math.sin(motionT * 0.85);
     ctx.globalCompositeOperation = 'lighter';
     if (EMBED) {
       ctx.fillStyle = ambientGrad;
@@ -774,27 +825,36 @@
     }
 
     /* 视角：俯视角度决定能否看见花心的螺旋 */
-    var pitchBase = (Q.pitch !== undefined && isFinite(parseFloat(Q.pitch))) ? parseFloat(Q.pitch) : 0.55;
-    var yaw = 0.35 + Math.sin(T * 0.17) * 0.42 + yawDrag;
-    var pitch = pitchBase + Math.sin(T * 0.11) * 0.035 + pitchDrag;
+    var pitchBase = (Q.pitch !== undefined && isFinite(parseFloat(Q.pitch))) ? parseFloat(Q.pitch) : 0.98;
+    var yaw = 0.35 + Math.sin(motionT * 0.17) * 0.30 + yawDrag;
+    var pitch = pitchBase + Math.sin(motionT * 0.11) * 0.025 + pitchDrag;
     var cyw = Math.cos(yaw), syw = Math.sin(yaw);
     var cpt = Math.cos(pitch), spt = Math.sin(pitch);
     var S = BASE * zoom;
+    var breath = Math.sin(motionT * 0.92);
     var open = 1 + 0.10 * pulse;
+    var breathing = 1 + (reduce ? 0 : 0.014 * breath);
+    var sway = reduce ? 0 : Math.sin(motionT * 0.43) * 0.024;
+    var flowSin = Math.sin(motionT * 1.18), flowCos = Math.cos(motionT * 1.18);
+    var motionReady = reduce ? 0 : smoothstep(bloomedAt + 0.4, bloomedAt + 1.6, T);
 
     // 以花冠圆心为投影原点 => 旋转时花冠始终锁在屏幕中心
     var ocx = BB_CROWN_CX, ocy = BB_CROWN_CY, ocz = BB_CROWN_CZ;
 
     /* 飘落花瓣：在花之前画，形成前后层次 */
-    drawPetals(dt, T);
+    drawPetals(reduce ? 0 : dt, motionT);
 
     bufN.fill(0);
+    glintN = 0;
+    depthGrid.fill(-1e9);
+    screenVisible.fill(0, 0, activeCount);
 
     /* 成形后直接取最终位置，避免每帧重复计算上万颗粒子的开场曲线。 */
     var assembled = T >= assembledAt;
     var bloomed = T >= bloomedAt;
     /* 投影 */
-    for (var i = 0; i < N; i++) {
+    for (var i = 0; i < activeCount; i++) {
+      if (LITE && ((quality === 1 && i % 8 === 7) || (quality === 0 && i % 5 === 4))) continue;
       var ar = assembled ? 1 : smoothstep(dly[i], dly[i] + dur[i], T);
       if (ar < 0.05) continue;
 
@@ -809,6 +869,12 @@
       var Y = (EMBED ? my : soy[i] + (my - soy[i]) * ar) - ocy;
       var Z = (EMBED ? mz : soz[i] + (mz - soz[i]) * ar) - ocz;
 
+      // 花冠轻轻呼吸，枝叶随花枝弯曲，粒子始终留在玫瑰上。
+      if (bloomed) {
+        X = X * (sidx[i] < 7 ? breathing : 1) + sway * swayWeight[i];
+        Z *= sidx[i] < 7 ? breathing : 1;
+        Y += (sidx[i] < 7 ? breath * 0.008 * motionReady : 0);
+      }
       var x1 = X * cyw + Z * syw;
       var z1 = -X * syw + Z * cyw;
 
@@ -826,32 +892,72 @@
       }
       if (sxp < -20 || sxp > W + 20 || syp < -20 || syp > H + 20) continue;
 
-      var band = ((z2 * 0.62 + 0.5) * NBAND) | 0;
-      if (band < 0) band = 0; else if (band >= NBAND) band = NBAND - 1;
+      screenX[i] = sxp; screenY[i] = syp; screenZ[i] = z2;
+      screenVisible[i] = 1;
+      var gx = clamp(Math.floor(sxp / gridCell), 0, gridCols - 1);
+      var gy = clamp(Math.floor(syp / gridCell), 0, gridRows - 1);
+      var cell = gy * gridCols + gx;
+      screenCell[i] = cell;
+      if (sidx[i] < 7 && z2 > depthGrid[cell]) depthGrid[cell] = z2;
+    }
 
-      var bi = band * NS + sidx[i];
-      var n = bufN[bi];
-      bufX[bi][n] = sxp;
-      bufY[bi][n] = syp;
-      bufN[bi] = n + 1;
+    // 小格保存前侧深度，后侧粒子不再穿透整朵花叠成白色亮团。
+    for (var i = 0; i < activeCount; i++) {
+      if (!screenVisible[i]) continue;
+      var z2 = screenZ[i], si = sidx[i];
+      var gap = depthGrid[screenCell[i]] - z2;
+      if (gap > 0.085) continue;
+      var band = clamp(((z2 * 0.56 + 0.5) * NBAND) | 0, 0, NBAND - 1);
+      if (gap > 0.025) band = 0;
+      else if (si < 7 && motionReady > 0) {
+        var wave = (waveCos[i] * flowCos + waveSin[i] * flowSin + 1) * 0.5;
+        if (wave > 0.94) { si = si < 3 || si === 5 ? 3 : 4; band = 2; }
+        else if (wave > 0.80) band = Math.min(2, band + 1);
+        if (wave > 0.985 && i % 61 === 0 && glintN < glintX.length) {
+          glintX[glintN] = screenX[i]; glintY[glintN++] = screenY[i];
+        }
+      }
+      var bi = band * NS + si, n = bufN[bi];
+      bufX[bi][n] = screenX[i]; bufY[bi][n] = screenY[i]; bufN[bi] = n + 1;
     }
 
     /* ---- 画粒子 ---- */
     ctx.globalCompositeOperation = 'lighter';
     ctx.lineCap = 'round';
+    // 嵌入画布会先降分辨率再随三维舞台缩放，点宽按实际像素补偿。
+    // 保证低分辨率模式的粒子仍清晰可见，避免亚像素覆盖让整朵花发暗。
+    var dotScale = EMBED ? Math.max(clamp(S / 245, 0.86, 1.35) / Math.pow(magnification, 0.72), 0.80 / DPR) : clamp(S / 245, 0.72, 1.35);
+    ctx.globalAlpha = EMBED ? 0.97 + 0.03 * (reduce ? 0 : breath) : 0.92 + 0.06 * (reduce ? 0 : breath);
     for (var b = 0; b < NB; b++) {
       var cnt = bufN[b];
       if (!cnt) continue;
+      if (EMBED) {
+        var style = b % NS;
+        // 瓣面保留饱和红色，只有瓣缘与微光叠加发光，避免加密后泛白。
+        ctx.globalCompositeOperation = style === 3 || style === 4 || style === 6 || style === 9 ? 'lighter' : 'source-over';
+      }
       ctx.strokeStyle = STYLE_STR[b];
-      ctx.lineWidth = STYLE_W[b];
+      ctx.lineWidth = EMBED ? Math.max(STYLE_W[b] * dotScale, 0.80 / DPR) : STYLE_W[b] * dotScale;
       var BX = bufX[b], BY = bufY[b];
       ctx.beginPath();
       for (var m = 0; m < cnt; m++) {
         var px = BX[m], py = BY[m];
         ctx.moveTo(px, py);
-        ctx.lineTo(px + 0.35, py);
+        ctx.lineTo(px + 0.18 * dotScale, py);
       }
       ctx.stroke();
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'lighter';
+
+    if (!reduce && glintN && quality > 0) {
+      var glintSize = (LITE ? 5 : 7) * dotScale;
+      ctx.globalAlpha = 0.35 + 0.12 * gp;
+      for (var g = 0; g < glintN; g++) {
+        ctx.drawImage(glint, glintX[g] - glintSize / 2, glintY[g] - glintSize / 2, glintSize, glintSize);
+      }
+      ctx.globalAlpha = 1;
     }
 
     /* ---- 辉光：降采样 + 模糊后叠加 ---- */
@@ -865,7 +971,7 @@
       if (EMBED) offc.filter = "none";
 
       ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = EMBED ? 0.28 : 0.42;
+      ctx.globalAlpha = EMBED ? 0.13 : 0.18;
       ctx.imageSmoothingEnabled = true;
       var filtered = false;
       if (!EMBED) {
@@ -879,7 +985,67 @@
     /* 点击涟漪 */
     drawRipples(dt);
 
-    if (!(EMBED && reduce)) scheduleFrame();
+  }
+
+  function frame(now) {
+    frameId = null;
+    if (document.hidden || embeddedPaused) return;
+    var interval = 1000 / targetFps;
+    if (!lastPaint) nextPaintAt = 0;
+    if (nextPaintAt && now + 0.5 < nextPaintAt) {
+      scheduleFrame();
+      return;
+    }
+    nextPaintAt = !nextPaintAt || now - nextPaintAt > interval * 2 ? now + interval : nextPaintAt + interval;
+    lastPaint = now;
+    if (!t0) { t0 = now; prev = now; }
+    if (!prev) prev = now;
+    var dt = (now - prev) / 1000;
+    prev = now;
+    if (dt > 0.2) dt = 0.2;
+
+    if (FREEZE === null && !reduce) elapsedClock += Math.min(dt, 0.05);
+    T = FREEZE !== null ? FREEZE : (reduce ? 10 : elapsedClock);
+    var detailScale = LITE ? (quality === 2 ? 1 : quality === 1 ? 0.90 : 0.75) : 1;
+    activeCount = baseCount + Math.round(detailCount * smoothstep(1, 1.35, getMagnification()) * detailScale);
+
+    if (DBG) {
+      if (dt > 0) { fpsAcc += dt; fpsN++; }
+      if (++dbgTick % 12 === 0 && fpsN) {
+        fpsShow = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0;
+        dbgEl.textContent =
+          'fps      ' + fpsShow.toFixed(1) + '\n' +
+          'particles ' + activeCount + '\n' +
+          'quality  ' + quality + '\n' +
+          'dpr      ' + DPR.toFixed(2) + '\n' +
+          (LITE ? 'draw     ' + mobileDrawMs.toFixed(2) + 'ms / ' + (interval * 0.70).toFixed(2) + 'ms\n' : '') +
+          't        ' + T.toFixed(1) + 's';
+      }
+    }
+
+    if (FREEZE === null && LITE && EMBED && !reduce) {
+      if (nextMobileQuality !== quality) {
+        quality = nextMobileQuality;
+        rasterScale = quality === 2 ? 1 : quality === 1 ? 0.90 : 0.80;
+        resize(false);
+      }
+    } else if (FREEZE === null && !LITE) {
+      if (dt > 0.027) slow++; else slow = Math.max(0, slow - 0.5);
+      var slowLimit = EMBED ? 12 : 90;
+      if (slow > slowLimit && quality === 2) { quality = 1; slow = 0; }
+      else if (slow > slowLimit && quality === 1) {
+        quality = 0; rasterScale = 0.8; resize(false); slow = 0;
+      }
+    }
+
+    if (pulse > 0) pulse = Math.max(0, pulse - dt * 2.0);
+
+    var measureMobile = LITE && EMBED && FREEZE === null && !reduce;
+    var paintStart = measureMobile ? performance.now() : 0;
+    paintRose(dt);
+    if (measureMobile) sampleMobileDraw(performance.now() - paintStart, dt * 1000);
+
+    if (!reduce && FREEZE === null) scheduleFrame();
   }
 
   /* ===================== 启动 ===================== */
@@ -906,8 +1072,12 @@
             typeof data.height !== "number" || !isFinite(data.height) || data.height <= 0 || data.height > 20000 ||
             typeof data.center !== "number" || !isFinite(data.center) || data.center < 0 || data.center > 1 ||
             typeof data.pixelRatio !== "number" || !isFinite(data.pixelRatio) || data.pixelRatio < 0.1 || data.pixelRatio > 2) return;
+        if (data.magnification !== undefined && (typeof data.magnification !== "number" ||
+            !isFinite(data.magnification) || data.magnification < 1 || data.magnification > 1.5)) return;
+        var previousLayout = embeddedLayout;
         embeddedLayout = data;
-        resize();
+        if (!previousLayout || previousLayout.width !== data.width || previousLayout.height !== data.height ||
+            previousLayout.center !== data.center || previousLayout.pixelRatio !== data.pixelRatio) resize();
         if (started && reduce) scheduleFrame();
         return;
       }
@@ -922,6 +1092,17 @@
   if (EMBED && reduce) window.addEventListener("resize", function () {
     if (started) scheduleFrame();
   });
+  if (motionPreference && motionPreference.addEventListener) {
+    motionPreference.addEventListener('change', function (event) {
+      reduce = event.matches;
+      CFG.bloom = !reduce && !LITE && !EMBED;
+      if (started) elapsedClock = Math.max(elapsedClock, assembledAt, bloomedAt);
+      if (reduce) { pulse = 0; RIPPLES.length = 0; }
+      if (frameId !== null) cancelAnimationFrame(frameId);
+      frameId = null; prev = 0; lastPaint = 0;
+      scheduleFrame();
+    });
+  }
   document.addEventListener("visibilitychange", function () {
     if (document.hidden) {
       if (frameId !== null) cancelAnimationFrame(frameId);
