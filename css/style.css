@@ -38,6 +38,11 @@ body{
   -webkit-user-select:none;
 }
 body.dragging,body.dragging .card{cursor:grabbing}
+.page-landscape #storyContent{
+  display:block;position:fixed;left:var(--story-physical-width);top:0;right:auto;bottom:auto;
+  width:var(--story-width);height:var(--story-height);
+  transform-origin:0 0;transform:rotate(90deg);overflow:hidden;isolation:isolate;
+}
 img{display:block;max-width:100%}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 
@@ -641,3 +646,15 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
   .card:hover .photo{filter:none}
   .video-play,.ctrl,.hint,.lb-backdrop,.lb-close,.lb-nav{backdrop-filter:none;-webkit-backdrop-filter:none}
 }
+
+/* 浏览器拒绝锁屏方向时，在页面内部提供完整的横屏视口。 */
+.page-landscape .enter{height:100%}
+.page-landscape .hint{display:none}
+.page-landscape .controls.mobile-controls{bottom:max(12px,calc(env(safe-area-inset-left) + 8px))}
+.page-landscape .topbar{width:min(calc(var(--story-width) * .92),760px)}
+.page-landscape .lb-figure{max-width:min(calc(var(--story-width) * .88),900px);max-height:calc(var(--story-height) * .84);gap:8px}
+.page-landscape .lb-figure img,.page-landscape .lb-figure video{max-height:min(calc(var(--story-height) * .68),calc(var(--story-height) * .84 - 100px))}
+.page-landscape .lb-figure video,.page-landscape .lb-software{width:min(calc(var(--story-width) * .80),850px)}
+.page-landscape .lb-software canvas{max-height:min(calc(var(--story-height) * .62),calc(var(--story-height) * .84 - 150px))}
+.page-landscape .lb-love{max-width:min(calc(var(--story-width) * .80),620px)}
+.page-landscape .lb-nav{display:grid}

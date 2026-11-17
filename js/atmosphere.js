@@ -81,8 +81,9 @@
     };
   }
   function resize() {
-    width = window.innerWidth;
-    height = window.innerHeight;
+    var viewport = window.storyViewport ? window.storyViewport.get() : { width: window.innerWidth, height: window.innerHeight };
+    width = viewport.width;
+    height = viewport.height;
     var dpr = Math.min(window.devicePixelRatio || 1, mobile ? 1.5 : 2);
     canvas.width = Math.max(1, Math.round(width * dpr));
     canvas.height = Math.max(1, Math.round(height * dpr));
@@ -150,6 +151,7 @@
     started = true; document.body.classList.add("scene-entered"); paint(0); resume();
   });
   window.addEventListener("resize", resize);
+  window.addEventListener("story:viewportchange", resize);
   window.addEventListener("story:gallery:pause", function () { galleryPaused = true; stop(); });
   window.addEventListener("story:gallery:resume", function () { galleryPaused = false; resume(); });
   document.addEventListener("visibilitychange", function () {

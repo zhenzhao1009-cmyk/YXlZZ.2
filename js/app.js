@@ -179,8 +179,9 @@
   /* 一圈固定张数；卡片尺寸由圆周弦长计算，保留清晰的黑色间隙。
      d / R 决定近远比例；固定该比例后，旋转时不会忽大忽小。 */
   function computeSize() {
-    var vw = window.innerWidth || 1280;
-    var vh = window.innerHeight || 800;
+    var viewport = window.storyViewport ? window.storyViewport.get() : { width: window.innerWidth, height: window.innerHeight };
+    var vw = viewport.width || 1280;
+    var vh = viewport.height || 800;
     var portrait = vh > vw;
     var frameWidth = Math.min(vw, vh * 1.9);
     P = frameWidth * (portrait ? 1.12 : 0.98);
@@ -219,8 +220,11 @@
         Math.abs(magnification - (roseLayout.magnification || 1)) < 0.015) return;
     if (force || roseCanvasScale !== coverage) {
       var root = document.documentElement.style;
-      root.setProperty("--rose-canvas-w", (window.innerWidth * cameraDistance / P / coverage).toFixed(2) + "px");
-      root.setProperty("--rose-canvas-h", (window.innerHeight * cameraDistance / P / coverage).toFixed(2) + "px");
+      var viewport = window.storyViewport ? window.storyViewport.get() : { width: window.innerWidth, height: window.innerHeight };
+      roseLayout.canvasWidth = Number((viewport.width * cameraDistance / P / coverage).toFixed(2));
+      roseLayout.canvasHeight = Number((viewport.height * cameraDistance / P / coverage).toFixed(2));
+      root.setProperty("--rose-canvas-w", roseLayout.canvasWidth + "px");
+      root.setProperty("--rose-canvas-h", roseLayout.canvasHeight + "px");
       roseCanvasScale = coverage;
     }
     roseRasterZoom = rasterZoom;
@@ -390,8 +394,9 @@
     if (!dragging && !resetView) rotation %= 360;
     cameraOffset = P - cameraDistance / zoom;
     updateRoseCanvas(false);
-    writeView("panX", stageWrap, "--pan-x", (panX * window.innerWidth).toFixed(2) + "px");
-    writeView("panY", stageWrap, "--pan-y", (panY * window.innerHeight).toFixed(2) + "px");
+    var viewport = window.storyViewport ? window.storyViewport.get() : { width: window.innerWidth, height: window.innerHeight };
+    writeView("panX", stageWrap, "--pan-x", (panX * viewport.width).toFixed(2) + "px");
+    writeView("panY", stageWrap, "--pan-y", (panY * viewport.height).toFixed(2) + "px");
     writeView("camera", cylinder, "transform",
       "translateZ(" + cameraOffset.toFixed(2) + "px) rotateX(" + viewTilt.toFixed(3) + "deg)");
     // 玫瑰与照片共享三维圆心，抵消俯仰以始终朝向镜头。
@@ -439,7 +444,8 @@
       dragMoved = true; // 双指手势不能触发照片点击。
       cardPress = null;
     }
-    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, pan: !!e.shiftKey });
+    var point = window.storyViewport ? window.storyViewport.point(e.clientX, e.clientY) : { x: e.clientX, y: e.clientY };
+    pointers.set(e.pointerId, { x: point.x, y: point.y, pan: !!e.shiftKey });
     stageWrap.setPointerCapture(e.pointerId);
     dragging = true;
     beginInteraction();
@@ -450,25 +456,27 @@
   function onMove(e) {
     if (!pointers.has(e.pointerId)) return;
     var point = pointers.get(e.pointerId);
-    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, pan: point.pan });
+    var input = window.storyViewport ? window.storyViewport.point(e.clientX, e.clientY) : { x: e.clientX, y: e.clientY };
+    var viewport = window.storyViewport ? window.storyViewport.get() : { width: window.innerWidth, height: window.innerHeight };
+    pointers.set(e.pointerId, { x: input.x, y: input.y, pan: point.pan });
     var points = Array.from(pointers.values());
     if (points.length === 2) {
       var distance = Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y);
       if (gesture.distance > 0) targetZoom = clamp(gesture.zoom * distance / gesture.distance, MIN_ZOOM, MAX_ZOOM);
-      panX = clamp(gesture.panX + ((points[0].x + points[1].x) / 2 - gesture.centerX) / window.innerWidth, -PAN_LIMIT, PAN_LIMIT);
-      panY = clamp(gesture.panY + ((points[0].y + points[1].y) / 2 - gesture.centerY) / window.innerHeight, -PAN_LIMIT, PAN_LIMIT);
+      panX = clamp(gesture.panX + ((points[0].x + points[1].x) / 2 - gesture.centerX) / viewport.width, -PAN_LIMIT, PAN_LIMIT);
+      panY = clamp(gesture.panY + ((points[0].y + points[1].y) / 2 - gesture.centerY) / viewport.height, -PAN_LIMIT, PAN_LIMIT);
       // 双指移动平移场景，开合缩放；不会改变观察角度。
       zoom = targetZoom;
       dragMoved = true;
       return;
     }
-    var dx = e.clientX - gesture.x;
-    var dy = e.clientY - gesture.y;
+    var dx = input.x - gesture.x;
+    var dy = input.y - gesture.y;
     if (Math.hypot(dx, dy) > 6) dragMoved = true;
     if (!dragMoved) return;
     if (gesture.pan) {
-      panX = clamp(gesture.panX + dx / window.innerWidth, -PAN_LIMIT, PAN_LIMIT);
-      panY = clamp(gesture.panY + dy / window.innerHeight, -PAN_LIMIT, PAN_LIMIT);
+      panX = clamp(gesture.panX + dx / viewport.width, -PAN_LIMIT, PAN_LIMIT);
+      panY = clamp(gesture.panY + dy / viewport.height, -PAN_LIMIT, PAN_LIMIT);
       velocity = tiltVelocity = 0;
       return;
     }
@@ -476,10 +484,10 @@
     viewTilt = clamp(gesture.tilt - dy * OPT.tiltSpeed, MIN_TILT, MAX_TILT);
     var now = performance.now();
     var dt = Math.max(1, now - lastT);
-    velocity = (e.clientX - lastX) / dt * OPT.dragSpeed * 16;
-    tiltVelocity = -(e.clientY - lastY) / dt * OPT.tiltSpeed * 16;
-    lastX = e.clientX;
-    lastY = e.clientY;
+    velocity = (input.x - lastX) / dt * OPT.dragSpeed * 16;
+    tiltVelocity = -(input.y - lastY) / dt * OPT.tiltSpeed * 16;
+    lastX = input.x;
+    lastY = input.y;
     lastT = now;
   }
 
@@ -522,7 +530,7 @@
     e.preventDefault();
     beginInteraction();
     velocity = tiltVelocity = 0;
-    var unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1;
+    var unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? (window.storyViewport ? window.storyViewport.get().height : window.innerHeight) : 1;
     var d = clamp(e.deltaY * unit, -240, 240);
     targetZoom = clamp(targetZoom * Math.exp(-d * OPT.wheelSpeed * 0.015), MIN_ZOOM, MAX_ZOOM);
     if (OPT.reducedMotion) zoom = targetZoom;
@@ -621,6 +629,11 @@
     var stageStyle = getComputedStyle(stageWrap);
     var origin = stageStyle.perspectiveOrigin.split(/\s+/);
     var bounds = stageWrap.getBoundingClientRect();
+    if (window.storyViewport && window.storyViewport.get().rotated) {
+      var point = window.storyViewport.point(x, y);
+      x = point.x; y = point.y;
+      bounds = { left: 0, top: 0 };
+    }
     var originX = parseFloat(origin[0]), originY = parseFloat(origin[1]);
     var perspective = parseFloat(stageStyle.perspective);
     var cameraStyle = getComputedStyle(cylinder);
@@ -791,7 +804,7 @@
       window.addEventListener("message", function (event) {
         if (event.source === roseFrame.contentWindow && event.data === "story:rose:ready") startCenterRose();
       });
-      roseFrame.src = "rose.html?embed=1&fps=" + TARGET_FPS + (MOBILE ? "&lite=1" : "") + "&v=3.0-rose7";
+      roseFrame.src = "rose.html?embed=1&fps=" + TARGET_FPS + (MOBILE ? "&lite=1" : "") + "&v=3.0-rose8";
     }
     document.getElementById("introKicker").textContent = INTRO.kicker || "给我们的两周年";
     document.getElementById("introHeading").textContent = INTRO.heading || "两年啦，还是好喜欢你。";
@@ -850,9 +863,10 @@
         assembly = window.assembleGallery({
           items: items,
           getLayout: function () {
-            return { width: window.innerWidth, height: window.innerHeight, radius: R,
+            var viewport = window.storyViewport ? window.storyViewport.get() : { width: window.innerWidth, height: window.innerHeight };
+            return { width: viewport.width, height: viewport.height, radius: R,
               perspective: P, distance: cameraDistance / zoom, tilt: viewTilt,
-              center: window.innerHeight > window.innerWidth ? .47 : .55, cardWidth: cardW, cardHeight: cardH };
+              center: viewport.height > viewport.width ? .47 : .55, cardWidth: cardW, cardHeight: cardH };
           },
           onComplete: function () { wallReady = true; openCompletedGallery(); }
         });
@@ -917,6 +931,14 @@
     window.addEventListener("blur", cancelDrag);
 
     var rt = null;
+    window.addEventListener("story:viewportchange", function () {
+      clearTimeout(rt);
+      cancelDrag();
+      dragMoved = true;
+      computeSize();
+      applyTransforms();
+      requestRender();
+    });
     window.addEventListener("resize", function () {
       clearTimeout(rt);
       rt = setTimeout(function () {

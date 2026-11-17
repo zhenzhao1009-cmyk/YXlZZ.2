@@ -532,7 +532,8 @@
 
   function resize(repaint) {
     DPR = Math.min(window.devicePixelRatio || 1, EMBED ? 1.5 : 2);
-    W = window.innerWidth; H = window.innerHeight;
+    W = EMBED && embeddedLayout && embeddedLayout.canvasWidth ? embeddedLayout.canvasWidth : window.innerWidth;
+    H = EMBED && embeddedLayout && embeddedLayout.canvasHeight ? embeddedLayout.canvasHeight : window.innerHeight;
     if (EMBED && embeddedLayout) DPR = embeddedLayout.pixelRatio;
     if (EMBED) {
       // 控制像素总量，手机按帧预算联动调整精度与粒子采样。
@@ -1074,10 +1075,14 @@
             typeof data.pixelRatio !== "number" || !isFinite(data.pixelRatio) || data.pixelRatio < 0.1 || data.pixelRatio > 2) return;
         if (data.magnification !== undefined && (typeof data.magnification !== "number" ||
             !isFinite(data.magnification) || data.magnification < 1 || data.magnification > 1.5)) return;
+        if ((data.canvasWidth !== undefined || data.canvasHeight !== undefined) &&
+            (typeof data.canvasWidth !== "number" || !isFinite(data.canvasWidth) || data.canvasWidth <= 0 || data.canvasWidth > 40000 ||
+             typeof data.canvasHeight !== "number" || !isFinite(data.canvasHeight) || data.canvasHeight <= 0 || data.canvasHeight > 40000)) return;
         var previousLayout = embeddedLayout;
         embeddedLayout = data;
         if (!previousLayout || previousLayout.width !== data.width || previousLayout.height !== data.height ||
-            previousLayout.center !== data.center || previousLayout.pixelRatio !== data.pixelRatio) resize();
+            previousLayout.center !== data.center || previousLayout.pixelRatio !== data.pixelRatio ||
+            previousLayout.canvasWidth !== data.canvasWidth || previousLayout.canvasHeight !== data.canvasHeight) resize();
         if (started && reduce) scheduleFrame();
         return;
       }
