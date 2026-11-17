@@ -680,14 +680,7 @@
       else playMusic();
     });
 
-    btnFull.addEventListener("click", function () {
-      var d = document.documentElement;
-      if (!document.fullscreenElement) {
-        if (d.requestFullscreen) d.requestFullscreen();
-      } else if (document.exitFullscreen) {
-        document.exitFullscreen();
-      }
-    });
+    if (window.bindStoryDisplayControls) window.bindStoryDisplayControls(toast, MOBILE);
 
     lightbox.addEventListener("click", function (e) {
       if (e.target.hasAttribute && e.target.hasAttribute("data-close")) closeLightbox();

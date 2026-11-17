@@ -259,6 +259,20 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .ctrl:hover{transform:translateY(-2px) scale(1.06);background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.3);color:#fff}
 .ctrl:active{transform:scale(.94)}
 .ctrl.off{opacity:.38}
+.ctrl-landscape{display:none}
+.controls.mobile-controls{
+  flex-direction:row;left:50%;right:auto;transform:translateX(-50%);
+  bottom:max(12px,calc(env(safe-area-inset-bottom) + 8px));gap:8px;
+}
+.mobile-controls .ctrl{width:44px;height:44px;flex-shrink:0}
+.controls.mobile-controls + .hint{bottom:max(clamp(64px,10vh,92px),calc(env(safe-area-inset-bottom) + 64px))}
+.controls.mobile-controls .ctrl-landscape{
+  display:flex;align-items:center;justify-content:center;gap:5px;
+  width:76px;border-radius:24px;font-size:11px;letter-spacing:.04em;
+}
+.ctrl-landscape svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.ctrl-landscape.is-active{color:#ffe0ee;border-color:rgba(239,162,197,.62);background:rgba(188,80,133,.23)}
+.ctrl-landscape:disabled{opacity:.60;cursor:progress}
 .ctrl.playing{color:#7dd3fc;border-color:rgba(125,211,252,.5);background:rgba(34,211,238,.14);animation:pulseRing 1.8s ease-in-out infinite}
 @keyframes pulseRing{0%,100%{box-shadow:0 0 0 0 rgba(34,211,238,.35)}50%{box-shadow:0 0 0 8px rgba(34,211,238,0)}}
 

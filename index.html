@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#09040d" />
 <meta name="app-version" content="3.0" />
 <title>我们的两周年</title>
-<link rel="stylesheet" href="css/style.css?v=3.0-entry2" />
+<link rel="stylesheet" href="css/style.css?v=3.0-landscape1" />
 <link rel="stylesheet" href="css/ring-intro.css?v=3.0" />
 <link rel="stylesheet" href="css/love-clock.css?v=3.0" />
 <link rel="stylesheet" href="css/password-entry.css?v=3.0-entry1" />
@@ -76,6 +76,10 @@
     </button>
     <button class="ctrl" id="btnFull" type="button" title="全屏" aria-label="全屏">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V5a1 1 0 0 1 1-1h4M20 9V5a1 1 0 0 0-1-1h-4M4 15v4a1 1 0 0 0 1 1h4M20 15v4a1 1 0 0 1-1 1h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </button>
+    <button class="ctrl ctrl-landscape" id="btnLandscape" type="button" title="横屏观看" aria-label="横屏观看" aria-pressed="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="7" width="16" height="10" rx="2"/><path d="M4 4h4M4 4v4M4 4a10 10 0 0 1 16 1M20 20h-4M20 20v-4M20 20a10 10 0 0 1-16-1"/></svg>
+      <span id="landscapeText">横屏</span>
     </button>
   </div>
 
@@ -153,6 +157,7 @@
   <script defer src="js/particle-heart.js?v=3.0-entry1"></script>
   <script defer src="js/gallery-assembly.js?v=3.0"></script>
   <script defer src="js/love-clock.js?v=3.0"></script>
-  <script defer src="js/app.js?v=3.0-hit1"></script>
+  <script defer src="js/display-controls.js?v=3.0-landscape1"></script>
+  <script defer src="js/app.js?v=3.0-landscape1"></script>
 </body>
 </html>
